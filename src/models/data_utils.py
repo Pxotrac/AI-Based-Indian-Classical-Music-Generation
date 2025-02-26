@@ -1,9 +1,8 @@
 import os
 import numpy as np
-import json
-from collections import defaultdict
 from tensorflow.keras.preprocessing.text import Tokenizer
 import logging
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -25,10 +24,10 @@ def load_pitch_data(pitch_path):
         return np.loadtxt(pitch_path)
     except FileNotFoundError:
         logging.warning(f"Pitch file not found: {pitch_path}")
-        return []
+        return np.array([])
     except Exception as e:
         logging.error(f"Error loading pitch data: {e}")
-        return []
+        return np.array([])
 
 def load_sections(sections_path):
     """Load sections from comma-separated .sections-manual-p.txt files"""
@@ -99,6 +98,18 @@ def preprocess_raag(raag_folder):
         logging.error(f"Error processing {raag_folder}: {str(e)}")
         return []
 
+
+def load_and_preprocess_data(dataset_path):
+    """Loads data from specified path and performs necessary preprocessing."""
+    logging.info(f"Loading and preprocessing data from: {dataset_path}")
+    output = []
+    for root, dirs, files in os.walk(dataset_path):
+        for dir in dirs:
+            raag_folder = os.path.join(root, dir)
+            output.extend(preprocess_raag(raag_folder))
+    logging.info(f"Finished loading and preprocessing, {len(output)} total entries.")
+    return output
+
 def extract_all_notes(output):
     all_notes = []
     for entry in output:
@@ -109,6 +120,10 @@ def extract_all_notes(output):
     return all_notes
 
 def create_tokenizer(all_notes):
+    """Creates and fits a Tokenizer, checks if all_notes is empty"""
+    if not all_notes:
+        logging.warning("No notes found, tokenizer will not be fitted.")
+        return None  # Or raise an exception, depending on how you want to handle it
     tokenizer = Tokenizer(
         filters='',
         lower=False,
@@ -119,7 +134,11 @@ def create_tokenizer(all_notes):
     tokenizer.fit_on_texts(all_notes)
     return tokenizer
 
+
 def create_sequences(tokenizer, all_notes, sequence_length):
+    if not all_notes:
+         logging.warning("No notes found, sequences cannot be created.")
+         return np.array([]), np.array([])
     token_ids = [tokenizer.texts_to_sequences([note])[0][0] for note in all_notes]
     X, y = [], []
     for i in range(len(token_ids) - sequence_length):

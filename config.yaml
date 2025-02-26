@@ -1,7 +1,5 @@
 dataset_path: "/content/drive/MyDrive/hindustani/hindustani"
 sequence_length: 50
-# tokenizer_path: "ragatokenzier.pkl" # Removed or commented out
-# model_path: "indianraga_model.keras" # Removed or commented out
 epochs: 100
 batch_size: 64
 validation_split: 0.2

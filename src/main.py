@@ -4,7 +4,7 @@ import datetime
 import yaml
 import pickle
 import tensorflow as tf
-from src.models.data_utils import load_tonic, load_pitch_data, load_sections, hz_to_svara, preprocess_raag, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels
+from src.models.data_utils import load_tonic, load_pitch_data, load_sections, hz_to_svara, preprocess_raag, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, load_and_preprocess_data
 from src.models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
 from src.models.model_builder import create_model
 from src.models.model import MultiHeadAttention, TransformerBlock, RaagConditioning
@@ -43,26 +43,33 @@ def main():
     
     tokenizer_save_path = f"{tokenizer_save_name}.pkl"
 
-
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
     root_path = dataset_path
-    all_output = []  # List to store the processed output for all raags.
-    
-    for root, dirs, files in os.walk(root_path):
-        for dir_name in dirs:
-            if "Raag" in dir_name:
-                raag_folder = os.path.join(root, dir_name)
-                output = preprocess_raag(raag_folder)
-                all_output.extend(output)
-    
+    all_output = load_and_preprocess_data(dataset_path)
+
     all_notes = extract_all_notes(all_output)
+    
+    if not all_notes:
+         logging.warning("No notes were extracted during data preprocessing. Check data paths and formats.")
+    
     tokenizer = create_tokenizer(all_notes)
+    
+    if tokenizer is None:
+        logging.error("Tokenizer was not created, check pre processing. Aborting")
+        return
+    
     vocab_size = len(tokenizer.word_index) + 1
+    logging.info(f"Vocab size: {vocab_size}")
+
+    if vocab_size <= 1:
+        logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
+        return  # Stop execution if vocab size is too small
+    
     X, y = create_sequences(tokenizer, all_notes, sequence_length)
     logging.info("Data preprocessing complete.")
-
-   # Raag ID mapping
+    
+    # Raag ID mapping
     logging.info("Creating raag ID mapping...")
     raag_id_dict, num_raags = create_raag_id_mapping(root_path)
     logging.info("Raag ID mapping complete")
