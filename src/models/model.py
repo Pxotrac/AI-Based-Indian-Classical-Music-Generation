@@ -1,145 +1,68 @@
-import os
-import numpy as np
-import pickle
 import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from data_utils import load_tonic, load_pitch_data, load_sections, hz_to_svara, preprocess_raag, extract_raag_names, generate_raag_labels, create_sequences
-from music_utils import generate_music, notes_to_midi, display_audio
-from model_builder import create_model  # Import the model definition
+from tensorflow.keras.layers import LayerNormalization
+import logging
 
-# --- File Paths ---
-root_path = r"E:\Projects\AI-Based-Indian-Classical-Music-Generation\data\hindustani"
-tokenizer_path = "ragatokenzier.pkl"
-model_checkpoint_path = "model_checkpoint_{epoch:02d}.h5" # Path to save model checkpoints
-# Example raag_folder, change as necessary, this is now only used to load the tokenizer
-raag_folder = r"E:\Projects\AI-Based-Indian-Classical-Music-Generation\data\hindustani\Anaahata by Milind Malshe\Raag Basanti Kedar"
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Custom Layers ----------------------------------------------------------------
+class MultiHeadAttention(tf.keras.layers.Layer):
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+        self.num_heads = num_heads
+        self.d_model = d_model
+        self.depth = d_model // num_heads
 
-# --- Load tokenizer ---
-try:
-    with open(tokenizer_path, "rb") as f:
-        tokenizer = pickle.load(f)
-    print("Tokenizer loaded successfully!")
-    print("Vocabulary size:", len(tokenizer.word_index))
+        self.wq = tf.keras.layers.Dense(d_model)
+        self.wk = tf.keras.layers.Dense(d_model)
+        self.wv = tf.keras.layers.Dense(d_model)
+        self.dense = tf.keras.layers.Dense(d_model)
 
-except FileNotFoundError as e:
-    print(f"Error loading data files: {e}. Please make sure files are present.")
-except Exception as e:
-    print(f"An unexpected error occured while loading the tokenizer: {e}")
+    def split_heads(self, x, batch_size):
+        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
+        return tf.transpose(x, perm=[0, 2, 1, 3])
 
+    def call(self, v, k, q):
+        batch_size = tf.shape(q)[0]
+        q = self.wq(q)
+        k = self.wk(k)
+        v = self.wv(v)
 
-# --- Load preprocessed sequence from JSON or by preprocessing ---
-# This part will now be used to get a vocab, raag_id_dict and all_notes.
-output = preprocess_raag(raag_folder)
+        q = self.split_heads(q, batch_size)
+        k = self.split_heads(k, batch_size)
+        v = self.split_heads(v, batch_size)
 
-# Generate all_notes for generating raag_labels
-all_notes = []
-for entry in output:
-    if "svara" in entry:
-        all_notes.append(entry["svara"])
-    elif "section" in entry:
-        all_notes.append(entry["section"])
+        scaled_attention = tf.nn.softmax(
+            (tf.matmul(q, k, transpose_b=True)) / tf.math.sqrt(tf.cast(self.depth, tf.float32))
+        )
+        output = tf.matmul(scaled_attention, v)
+        output = tf.transpose(output, perm=[0, 2, 1, 3])
+        output = tf.reshape(output, (batch_size, -1, self.d_model))
+        return self.dense(output)
 
-# --- Get Raag IDs ---
-# Extract all raag names
-all_raag_names = set()
-for root, dirs, files in os.walk(root_path):
-    for dir_name in dirs:
-        if "Raag" in dir_name:
-            extracted_raags = extract_raag_names(dir_name)
-            all_raag_names.update(extracted_raags)
-# Create raag_id mapping
-unique_raags = sorted(list(all_raag_names))
-raag_id_dict = {raag: idx for idx, raag in enumerate(unique_raags)}
+class TransformerBlock(tf.keras.layers.Layer):
+    def __init__(self, d_model, num_heads, **kwargs):  # Add **kwargs
+        super().__init__(**kwargs)  # Pass **kwargs to super().__init__
+        self.attn = MultiHeadAttention(d_model, num_heads)
+        self.ffn = tf.keras.Sequential([
+            tf.keras.layers.Dense(d_model, activation='relu'),
+            tf.keras.layers.Dense(d_model)
+        ])
+        self.layernorm1 = LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = LayerNormalization(epsilon=1e-6)
 
-# Print or save raag_id for later use
-print("raag_id mapping:", raag_id_dict)
+    def call(self, inputs):
+        attn_output = self.attn(inputs, inputs, inputs)  # Self-attention
+        out1 = self.layernorm1(inputs + attn_output)
+        ffn_output = self.ffn(out1)
+        return self.layernorm2(out1 + ffn_output)
 
-# Count unique raags
-num_raags = len(all_raag_names)
-print("Number of unique raags:", num_raags)
+class RaagConditioning(tf.keras.layers.Layer):
+    def __init__(self, sequence_length, **kwargs):  # Add **kwargs
+        super().__init__(**kwargs)  # Pass **kwargs to super().__init__
+        self.sequence_length = sequence_length
 
-# --- Collect Data from All Raags ---
-all_data = [] # Initialize an empty list to store all the data
-for root, dirs, files in os.walk(root_path):
-    for dir_name in dirs:
-        if "Raag" in dir_name:
-            raag_path = os.path.join(root, dir_name)
-            print(f"Preprocessing raag: {raag_path}")
-            raag_data = preprocess_raag(raag_path)
-            if raag_data:
-              all_data.extend(raag_data) # Add the preprocessed data
+    def call(self, raag_embed):
+        return tf.tile(raag_embed, [1, self.sequence_length, 1])
 
-# --- Generate all_notes from the all_data---
-all_notes = []
-for entry in all_data:
-    if "svara" in entry:
-        all_notes.append(entry["svara"])
-    elif "section" in entry:
-        all_notes.append(entry["section"])
-
-
-# --- Create sequences (X, y) for training ---
-sequence_length = 50  # Context window
-X, y = create_sequences(all_notes, sequence_length, tokenizer)
-
-# --- Model Definition ---
-# Generate raag labels
-raag_labels = generate_raag_labels(root_path, X, all_notes, raag_id_dict, num_raags)
-
-# Get vocabulary size
-vocab_size = len(tokenizer.word_index) + 1
-print("Total vocabulary size:", vocab_size)
-model = create_model(vocab_size, num_raags, sequence_length) # Create the model
-model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-model.summary()
-
-
-# --- Training ---
-# Define the EarlyStopping callback
-early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-
-# Define the ModelCheckpoint callback
-checkpoint_callback = ModelCheckpoint(
-    filepath=model_checkpoint_path,
-    save_freq='epoch',
-    monitor='val_loss',
-    save_best_only=True
-)
-
-# Reshape raag_labels to (num_samples, 1)
-raag_labels = raag_labels.reshape(-1, 1)
-
-# Train the model with the callbacks
-history = model.fit(
-    x=[X, raag_labels],
-    y=y,
-    batch_size=64,
-    epochs=100,
-    validation_split=0.2,
-    callbacks=[early_stopping, checkpoint_callback]
-)
-
-# --- Example Usage - Music Generation ---
-# Example usage
-raag_id_value = raag_id_dict.get('Basanti Kedar', 0)  # Ensure this ID is within 0-57
-
-# Seed with a short melody instead of all "Sa"
-seed = [
-    tokenizer.word_index["Sa"], tokenizer.word_index["Re"], tokenizer.word_index["Ga"],
-    tokenizer.word_index["Ma"], tokenizer.word_index["Pa"]
-] * 10  # Repeat to fill 50 tokens
-seed = seed[:sequence_length]  # Trim to exact length
-
-generated_tokens = generate_music(model, seed, raag_id_value, vocab_size, sequence_length, tokenizer, temperature=1.8, top_k=9)
-
-# Map tokens to svaras (include only musical notes)
-valid_notes = {"Sa", "Re", "Ga", "Ma", "Pa", "Dha", "Ni"}
-generated_notes = [
-    tokenizer.index_word.get(token, '<UNK>')
-    for token in generated_tokens
-    if tokenizer.index_word.get(token, '<UNK>') in valid_notes
-]
-
-midi_path = notes_to_midi(generated_notes)
-display_audio(midi_path)
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], self.sequence_length, input_shape[2])

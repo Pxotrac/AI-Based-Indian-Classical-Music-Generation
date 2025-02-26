@@ -1,3 +1,8 @@
 dataset_path: "/content/drive/MyDrive/hindustani/hindustani"
-sample_rate: 22050
 sequence_length: 50
+tokenizer_path: "ragatokenzier.pkl"
+model_path: "indianraga_model.keras"
+epochs: 100
+batch_size: 64
+validation_split: 0.2
+patience: 10
