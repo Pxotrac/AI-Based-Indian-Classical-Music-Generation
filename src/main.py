@@ -20,8 +20,6 @@ def main():
     
     dataset_path = config['dataset_path']
     sequence_length = config['sequence_length']
-    tokenizer_path = config['tokenizer_path']
-    model_path = config['model_path'] # This is not used now, but kept for reference in config
     epochs = config['epochs']
     batch_size = config['batch_size']
     validation_split = config['validation_split']
@@ -30,13 +28,21 @@ def main():
     # Determine model save path
     model_save_name = input("Enter model name (or press Enter for default naming): ").strip()
     if not model_save_name:
-        # Generate a name based on execution count
-        execution_count = 1  # You would need a way to persist this count if needed
-        # Here it is just a variable that will always be 1, need to be handled to persist over executions
+        # Generate a name based on execution count (you would handle persistency)
+        execution_count = 1
         model_save_name = f"model_{execution_count}"
 
-    model_save_path = f"{model_save_name}.keras"  # Add .keras extension
+    model_save_path = f"{model_save_name}.keras"
+
+    # Determine tokenizer save path
+    tokenizer_save_name = input("Enter tokenizer name (or press Enter for default naming): ").strip()
+    if not tokenizer_save_name:
+        # Generate a name based on execution count (you would handle persistency)
+        execution_count = 1
+        tokenizer_save_name = f"tokenizer_{execution_count}"
     
+    tokenizer_save_path = f"{tokenizer_save_name}.pkl"
+
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -103,9 +109,9 @@ def main():
         logging.error(f"An error occurred while saving the model: {e}")
     
     try:
-        with open(tokenizer_path, 'wb') as f:
+        with open(tokenizer_save_path, 'wb') as f:
             pickle.dump(tokenizer, f)
-        logging.info("Tokenizer saved successfully")
+        logging.info(f"Tokenizer saved successfully to: {tokenizer_save_path}")
     except Exception as e:
         logging.error(f"An error occurred while saving the tokenizer: {e}")
 
@@ -120,7 +126,7 @@ def main():
     )
     
     try:
-        with open(tokenizer_path, 'rb') as f:
+        with open(tokenizer_save_path, 'rb') as f:
             tokenizer = pickle.load(f)
         logging.info("Tokenizer loaded successfully!")
     except Exception as e:
