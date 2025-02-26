@@ -82,6 +82,17 @@ target/
 profile_default/
 ipython_config.py
 
+# Data files
+*.mp3
+*.wav
+*.ctonic.txt
+*.pitch.txt
+*.sections-manual-p.txt
+*.mid
+
+# Data directory
+data/
+
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:

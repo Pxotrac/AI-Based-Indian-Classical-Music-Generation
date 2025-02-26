@@ -1,0 +1,2 @@
+dataset_path: "/content/drive/MyDrive/hindustani/hindustani"
+    sample_rate: 22050 # example for loading audio files, add the correct sample rate here.
