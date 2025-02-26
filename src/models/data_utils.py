@@ -3,6 +3,7 @@ import numpy as np
 from tensorflow.keras.preprocessing.text import Tokenizer
 import logging
 import re
+from glob import glob
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -28,7 +29,6 @@ def load_pitch_data(pitch_path):
     except Exception as e:
         logging.error(f"Error loading pitch data: {e}")
         return np.array([])
-
 def load_sections(sections_path):
     """Load sections from comma-separated .sections-manual-p.txt files"""
     sections = []
@@ -73,6 +73,8 @@ def preprocess_raag(raag_folder):
         pitch_files = glob(os.path.join(raag_folder, "*.pitch.txt"))
         sections_files = glob(os.path.join(raag_folder, "*.sections-manual-p.txt"))
         
+        print(f"Checking folder: {raag_folder}") # Debugging
+        
         if ctonic_files:
             ctonic_path = ctonic_files[0]
         else:
@@ -87,6 +89,10 @@ def preprocess_raag(raag_folder):
             sections_path = sections_files[0]
         else:
             raise FileNotFoundError(f"Missing .sections-manual-p.txt file in {raag_folder}")
+            
+        print(f"  ctonic_path: {ctonic_path}") # Debugging
+        print(f"  pitch_path: {pitch_path}")   # Debugging
+        print(f"  sections_path: {sections_path}") # Debugging
 
         # Load data
         tonic_hz = load_tonic(ctonic_path)
@@ -149,7 +155,6 @@ def create_tokenizer(all_notes):
     tokenizer.fit_on_texts(all_notes)
     return tokenizer
 
-
 def create_sequences(tokenizer, all_notes, sequence_length):
     if not all_notes:
          logging.warning("No notes found, sequences cannot be created.")
@@ -188,20 +193,35 @@ def create_raag_id_mapping(root_path):
     return raag_id_dict, len(all_raag_names)
 
 def generate_raag_labels(root_path, X, all_notes, raag_id_dict, num_raags):
-    import numpy as np
-    logging.info("Generating raag labels...")
-    raag_labels = []
-    note_index = 0
-    
-    for root, dirs, files in os.walk(root_path):
-        for dir_name in dirs:
-            if "Raag" in dir_name:
-                raag_names = extract_raag_names(dir_name)
-                if raag_names:
-                    raag_id_value = raag_id_dict.get(raag_names[0], 0)
-                    num_notes_for_raag = sum(1 for note in all_notes if note in dir_name)
-                    raag_labels.extend([raag_id_value] * num_notes_for_raag)
-    
-    raag_labels = np.pad(raag_labels, (0, len(X) - len(raag_labels)), 'constant')
-    logging.info("Raag labels generated successfully")
-    return np.array(raag_labels)
+        import numpy as np
+        logging.info("Generating raag labels...")
+        raag_labels = []
+        
+        all_output = []
+        for root, dirs, files in os.walk(root_path):
+            for dir in dirs:
+                if "Raag" in dir:
+                    raag_folder = os.path.join(root, dir)
+                    output = preprocess_raag(raag_folder)
+                    if output:
+                        all_output.append(output)
+
+        output_index = 0
+        for root, dirs, files in os.walk(root_path):
+            for dir_name in dirs:
+                if "Raag" in dir_name:
+                  raag_names = extract_raag_names(dir_name)
+                  if raag_names:
+                      raag_id_value = raag_id_dict.get(raag_names[0], 0)
+                      num_notes_for_raag = 0
+                      
+                      #Count notes for current raag
+                      if output_index < len(all_output):
+                          num_notes_for_raag = len(all_output[output_index])
+                      
+                      raag_labels.extend([raag_id_value] * num_notes_for_raag)
+                      output_index +=1
+
+        raag_labels = np.pad(raag_labels, (0, len(X) - len(raag_labels)), 'constant')
+        logging.info("Raag labels generated successfully")
+        return np.array(raag_labels)
