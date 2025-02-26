@@ -67,17 +67,32 @@ def preprocess_raag(raag_folder):
     """Full preprocessing pipeline with corrected section file paths"""
     try:
         base_name = os.path.basename(raag_folder)
-        ctonic_path = os.path.join(raag_folder, f"{base_name}.ctonic.txt")
-        pitch_path = os.path.join(raag_folder, f"{base_name}.pitch.txt")
+        # Construct paths based on the files inside the folders, not the folder names
         
-        # Corrected section file path (matches your dataset's naming convention)
-        sections_path = os.path.join(raag_folder, f"{base_name}.sections-manual-p.txt")
+        ctonic_files = glob(os.path.join(raag_folder, "*.ctonic.txt"))
+        pitch_files = glob(os.path.join(raag_folder, "*.pitch.txt"))
+        sections_files = glob(os.path.join(raag_folder, "*.sections-manual-p.txt"))
         
+        if ctonic_files:
+            ctonic_path = ctonic_files[0]
+        else:
+            raise FileNotFoundError(f"Missing .ctonic.txt file in {raag_folder}")
+
+        if pitch_files:
+            pitch_path = pitch_files[0]
+        else:
+            raise FileNotFoundError(f"Missing .pitch.txt file in {raag_folder}")
+
+        if sections_files:
+            sections_path = sections_files[0]
+        else:
+            raise FileNotFoundError(f"Missing .sections-manual-p.txt file in {raag_folder}")
+
         # Load data
         tonic_hz = load_tonic(ctonic_path)
         pitch_data = load_pitch_data(pitch_path)
         sections = load_sections(sections_path)
-        
+               
         # Convert to symbolic representation
         note_sequence = []
         for t, freq in pitch_data:
