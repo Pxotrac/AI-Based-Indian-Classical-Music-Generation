@@ -4,8 +4,10 @@ import yaml
 import pickle
 import numpy as np
 from tensorflow.keras.preprocessing.text import Tokenizer
-from google.colab import drive
-drive.mount('/content/drive', force_remount=True)
+
+#use in collab
+#from google.colab import drive
+#drive.mount('/content/drive', force_remount=True)
 
 # --- Mount the second drive ---
 # Add the following code block BEFORE loading config.yaml
