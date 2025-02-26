@@ -4,10 +4,10 @@ import datetime
 import yaml
 import pickle
 import tensorflow as tf
-from src.models.data_utils import load_tonic, load_pitch_data, load_sections, hz_to_svara, preprocess_raag, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, load_and_preprocess_data
-from src.models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
-from src.models.model_builder import create_model
-from src.models.model import MultiHeadAttention, TransformerBlock, RaagConditioning
+from models.data_utils import load_tonic, load_pitch_data, load_sections, hz_to_svara, preprocess_raag, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, load_and_preprocess_data
+from models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
+from models.model_builder import create_model
+from models.model import MultiHeadAttention, TransformerBlock, RaagConditioning
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 
 # Set up logging
