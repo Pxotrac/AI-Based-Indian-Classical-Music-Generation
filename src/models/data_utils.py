@@ -49,7 +49,7 @@ def load_sections(file_path):
         except Exception as e:
             logging.error(f"Error loading sections from {file_path}: {e}")
             return None
-
+        
 def hz_to_svara(frequency_hz, tonic_hz):
     """Converts frequency in Hz to a svara string."""
     if not frequency_hz or frequency_hz == 0 or not tonic_hz or tonic_hz == 0 :
@@ -95,20 +95,27 @@ def preprocess_raag(raag_dir, sa_file, pitch_file, sections_file):
     pitch_path = os.path.join(raag_dir, pitch_file)
     sections_path = os.path.join(raag_dir, sections_file)
 
+    print(f"Tonic path: {tonic_path}")
+    print(f"Pitch path: {pitch_path}")
+    print(f"Sections path: {sections_path}")
+
     tonic_hz = load_tonic(tonic_path)
     if tonic_hz is None:
       logging.error(f"Failed to load tonic for {raag_dir}")
       return None
+    print(f"Tonic Hz: {tonic_hz}")
     
     pitch_data = load_pitch_data(pitch_path, tonic_hz)
     if pitch_data is None:
       logging.error(f"Failed to load pitch data for {raag_dir}")
       return None
+    print(f"Pitch data: {pitch_data}")
     
     sections = load_sections(sections_path)
     if sections is None:
       logging.error(f"Failed to load sections for {raag_dir}")
       return None
+    print(f"Sections: {sections}")
       
     if len(sections) != len(pitch_data):
          logging.error(f"Length mismatch between sections and pitch data for {raag_dir}")
@@ -185,63 +192,39 @@ def create_raag_id_mapping(root_path):
 def generate_raag_labels(root_path, X, all_notes, raag_id_dict, num_raags):
     """Generates raag labels for each sequence."""
     logging.info("Generating raag labels...")
-    raag_labels = np.zeros(len(X), dtype='int32') # Initialize as 0s
+    
     if not all_notes:
         logging.warning("No notes, cannot generate raag labels")
-        return raag_labels
+        return np.zeros(len(X), dtype='int32')
     
+    raag_labels = np.zeros(len(X), dtype='int32')  # Initialize as 0s
     current_note_index = 0
-    
+
     for raag_name, raag_id in raag_id_dict.items():
-      
-      raag_path = os.path.join(root_path, raag_name)
-      
-      sa_file = [f for f in os.listdir(raag_path) if f.endswith(".sa.txt")]
-      pitch_file = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
-      sections_file = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
-      
-      if len(sa_file) == 0 or len(pitch_file) == 0 or len(sections_file) == 0:
-          logging.warning(f"skipping raag {raag_name}")
-          continue
-      
-      preprocessed_data = preprocess_raag(raag_path, sa_file[0], pitch_file[0], sections_file[0])
+        raag_path = os.path.join(root_path, raag_name)
+        
+        sa_file = [f for f in os.listdir(raag_path) if f.endswith(".sa.txt")]
+        pitch_file = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
+        sections_file = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
+        
+        if not sa_file or not pitch_file or not sections_file:
+            logging.warning(f"Skipping raag {raag_name} due to missing files")
+            continue
+            
+        preprocessed_data = preprocess_raag(raag_path, sa_file[0], pitch_file[0], sections_file[0])
 
-      if preprocessed_data is None:
-          logging.warning(f"Failed to load data for {raag_name}")
-          continue
+        if preprocessed_data is None:
+            logging.warning(f"Failed to load data for {raag_name}")
+            continue
+        
+        extracted_notes = [note for _, note in preprocessed_data if note is not None]
 
-      extracted_notes = [note for _, note in preprocessed_data if note is not None]
-    
-      for i in range(len(extracted_notes)):
-        if current_note_index < len(all_notes) and all_notes[current_note_index] == extracted_notes[i]:
-           raag_labels[current_note_index] = raag_id
-           current_note_index += 1
-        if current_note_index >= len(all_notes):
-          break;
-    logging.info("Raag labels generated")
+        for i in range(len(extracted_notes)):
+          if current_note_index < len(all_notes) and all_notes[current_note_index] == extracted_notes[i]:
+            raag_labels[current_note_index] = raag_id
+            current_note_index += 1
+          else:
+            break # stop once the note does not match
+
+    logging.info(f"Generated {len(raag_labels)} raag labels")
     return raag_labels
-
-
-def load_and_preprocess_data(dataset_path):
-    """Loads and preprocesses all raag data."""
-    logging.info("Starting data loading and preprocessing...")
-    all_output = []
-    
-    for item in os.listdir(dataset_path):
-        item_path = os.path.join(dataset_path, item)
-        if os.path.isdir(item_path):
-            sa_file = [f for f in os.listdir(item_path) if f.endswith(".sa.txt")]
-            pitch_file = [f for f in os.listdir(item_path) if f.endswith(".pitch.txt")]
-            sections_file = [f for f in os.listdir(item_path) if f.endswith(".sections-manual-p.txt")]
-            
-            if len(sa_file) == 0 or len(pitch_file) == 0 or len(sections_file) == 0:
-              logging.error(f"Missing required files in {item_path}")
-              continue
-            
-            preprocessed = preprocess_raag(item_path, sa_file[0], pitch_file[0], sections_file[0])
-            if preprocessed is not None:
-              all_output.append(preprocessed)
-            else:
-              logging.error(f"Error preprocessing {item_path}")
-    logging.info(f"Finished loading and preprocessing, {sum([len(x) for x in all_output if x is not None])} total entries.")
-    return all_output
