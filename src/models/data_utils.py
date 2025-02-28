@@ -156,17 +156,23 @@ def create_tokenizer(all_notes):
     return tokenizer
 
 def create_sequences(tokenizer, all_notes, sequence_length):
-    if not all_notes:
-         logging.warning("No notes found, sequences cannot be created.")
-         return np.array([]), np.array([])
-    token_ids = [tokenizer.texts_to_sequences([note])[0][0] for note in all_notes]
-    X, y = [], []
-    for i in range(len(token_ids) - sequence_length):
-        X.append(token_ids[i:i+sequence_length])
-        y.append(token_ids[i+sequence_length])
-    
-    X = np.array(X)
-    y = np.array(y)
+    """Transforms a list of notes into sequences suitable for training."""
+    logging.info("Creating sequences...")
+    sequences = []
+    try:
+        for i in range(len(all_notes) - sequence_length):
+            seq = all_notes[i:i + sequence_length]
+            seq_tokens = [tokenizer.word_index[note] for note in seq]
+            sequences.append(seq_tokens)
+
+        X = np.array(sequences[:-1])
+        y = np.array([sequences[-1] for sequences in sequences[1:]])
+        logging.info(f"Created {len(X)} sequences")
+    except Exception as e:
+        logging.error(f"Error creating sequences: {e}")
+        return None, None
+
+    logging.info("Sequences creation complete")
     return X, y
 
 def extract_raag_names(folder_name):

@@ -48,7 +48,7 @@ def main():
     root_path = dataset_path
     all_output = load_and_preprocess_data(dataset_path)
 
-    all_notes = extract_all_notes(all_output)
+all_notes = extract_all_notes(all_output)
     
     if not all_notes:
          logging.warning("No notes were extracted during data preprocessing. Check data paths and formats.")
@@ -67,13 +67,15 @@ def main():
         return  # Stop execution if vocab size is too small
     
     X, y = create_sequences(tokenizer, all_notes, sequence_length)
-    logging.info("Data preprocessing complete.")
+        if X is None or y is None:
+            logging.error("Sequences not created successfully, check previous logs")
+            return
+        logging.info("Data preprocessing complete.")
     
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
     raag_id_dict, num_raags = create_raag_id_mapping(root_path)
     logging.info("Raag ID mapping complete")
-    logging.info(f"Number of raags: {num_raags}")
 
     # Generate raag labels
     logging.info("Generating raag labels...")

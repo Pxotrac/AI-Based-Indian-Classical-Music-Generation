@@ -1,0 +1,4 @@
+[remote "gdrive_remote"]
+    url = gdrive://1VZPzVS_M-Y-FEWcouV7dTKI2Alpl6v4F
+    gdrive_use_service_account = true
+    gdrive_service_account_json = E:/Projects/AI-Based-Indian-Classical-Music-Generation/gdrive-key.json
