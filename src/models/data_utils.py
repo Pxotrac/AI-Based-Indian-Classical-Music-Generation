@@ -129,9 +129,10 @@ def extract_all_notes(all_output):
             continue
         for section, note in raag_data:
             if note is not None:
-              all_notes.append(note)
+                logging.info(f"appending note: {note} in section: {section}")
+                all_notes.append(note)
             else:
-              logging.warning(f"Skipping None note in section {section}")
+                logging.warning(f"Skipping None note in section {section}")
     logging.info(f"Extracted {len(all_notes)} notes")
     return all_notes
 
