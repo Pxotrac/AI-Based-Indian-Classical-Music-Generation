@@ -26,21 +26,11 @@ def main():
     patience = config['patience']
     
     # Determine model save path
-    model_save_name = input("Enter model name (or press Enter for default naming): ").strip()
-    if not model_save_name:
-        # Generate a name based on execution count (you would handle persistency)
-        execution_count = 1
-        model_save_name = f"model_{execution_count}"
-
+    model_save_name = "my_model_name"
     model_save_path = f"{model_save_name}.keras"
 
     # Determine tokenizer save path
-    tokenizer_save_name = input("Enter tokenizer name (or press Enter for default naming): ").strip()
-    if not tokenizer_save_name:
-        # Generate a name based on execution count (you would handle persistency)
-        execution_count = 1
-        tokenizer_save_name = f"tokenizer_{execution_count}"
-    
+    tokenizer_save_name = "my_tokenizer_name"
     tokenizer_save_path = f"{tokenizer_save_name}.pkl"
     
     # Data Preprocessing
