@@ -42,16 +42,17 @@ def main():
         tokenizer_save_name = f"tokenizer_{execution_count}"
     
     tokenizer_save_path = f"{tokenizer_save_name}.pkl"
-
+    
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
     root_path = dataset_path
     all_output = load_and_preprocess_data(dataset_path)
 
-all_notes = extract_all_notes(all_output)
+    all_notes = extract_all_notes(all_output)
     
     if not all_notes:
          logging.warning("No notes were extracted during data preprocessing. Check data paths and formats.")
+         return
     
     tokenizer = create_tokenizer(all_notes)
     
@@ -67,15 +68,16 @@ all_notes = extract_all_notes(all_output)
         return  # Stop execution if vocab size is too small
     
     X, y = create_sequences(tokenizer, all_notes, sequence_length)
-        if X is None or y is None:
-            logging.error("Sequences not created successfully, check previous logs")
-            return
-        logging.info("Data preprocessing complete.")
+    if X is None or y is None:
+        logging.error("Sequences not created successfully, check previous logs")
+        return
+    logging.info("Data preprocessing complete.")
     
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
     raag_id_dict, num_raags = create_raag_id_mapping(root_path)
     logging.info("Raag ID mapping complete")
+    logging.info(f"Number of raags: {num_raags}")
 
     # Generate raag labels
     logging.info("Generating raag labels...")
@@ -96,7 +98,6 @@ all_notes = extract_all_notes(all_output)
         monitor='val_loss',
         save_best_only=True
     )
-
     # Reshape raag_labels to (num_samples, 1)
     raag_labels = raag_labels.reshape(-1, 1)
 

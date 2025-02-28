@@ -1,158 +1,149 @@
 import os
-import numpy as np
-from tensorflow.keras.preprocessing.text import Tokenizer
 import logging
+import numpy as np
+import pretty_midi
 import re
-from glob import glob
+from collections import Counter
+import yaml
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def load_tonic(ctonic_path):
-    """Load tonic frequency from .ctonic.txt file (handles scalar/array)"""
+def load_tonic(file_path):
+    """Loads tonic (Sa) frequency from a text file."""
     try:
-        tonic_data = np.loadtxt(ctonic_path)
-        return tonic_data.item() if tonic_data.ndim == 0 else tonic_data[0]
-    except FileNotFoundError:
-        logging.warning(f"Tonic file not found {ctonic_path}, using a default value")
-        return 440
+        with open(file_path, 'r') as file:
+            tonic = float(file.readline().strip())
+        return tonic
     except Exception as e:
-        logging.error(f"Error loading tonic: {e}")
-        return 440
-
-def load_pitch_data(pitch_path):
-    """Load time-stamped pitch values from .pitch.txt"""
-    try:
-        return np.loadtxt(pitch_path)
-    except FileNotFoundError:
-        logging.warning(f"Pitch file not found: {pitch_path}")
-        return np.array([])
-    except Exception as e:
-        logging.error(f"Error loading pitch data: {e}")
-        return np.array([])
-def load_sections(sections_path):
-    """Load sections from comma-separated .sections-manual-p.txt files"""
-    sections = []
-    if os.path.exists(sections_path):
-        try:
-            with open(sections_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    parts = line.split(",")
-                    if len(parts) < 4:
-                        continue
-                    start = float(parts[0])
-                    end = float(parts[2])
-                    # Remove non-ASCII characters and normalize
-                    label = parts[3].encode("ascii", "ignore").decode().strip().lower()
-                    label = "_".join(label.split())  # Replace spaces with underscores
-                    sections.append((start, end, label))
-        except FileNotFoundError:
-            logging.warning(f"Sections file not found: {sections_path}")
-        except Exception as e:
-            logging.error(f"Error loading sections: {str(e)}")
-    return sections
-
-def hz_to_svara(freq, tonic_hz):
-    """Convert frequency to Indian svara (Sa, Re, Ga, etc.)"""
-    if freq == 0:
+        logging.error(f"Error loading tonic from {file_path}: {e}")
         return None
-    cents = 1200 * np.log2(freq / tonic_hz)
-    svaras = {0: 'Sa', 200: 'Re', 300: 'Ga', 500: 'Ma', 700: 'Pa', 900: 'Dha', 1100: 'Ni'}
-    nearest = min(svaras.keys(), key=lambda x: abs(x - cents))
-    return svaras[nearest]
 
-def preprocess_raag(raag_folder):
-    """Full preprocessing pipeline with corrected section file paths"""
+def load_pitch_data(file_path, tonic_hz):
+    """Loads pitch data from a text file, converting Hz to svara."""
     try:
-        base_name = os.path.basename(raag_folder)
-        # Construct paths based on the files inside the folders, not the folder names
-        
-        ctonic_files = glob(os.path.join(raag_folder, "*.ctonic.txt"))
-        pitch_files = glob(os.path.join(raag_folder, "*.pitch.txt"))
-        sections_files = glob(os.path.join(raag_folder, "*.sections-manual-p.txt"))
-        
-        print(f"Checking folder: {raag_folder}") # Debugging
-        
-        if ctonic_files:
-            ctonic_path = ctonic_files[0]
-        else:
-            raise FileNotFoundError(f"Missing .ctonic.txt file in {raag_folder}")
-
-        if pitch_files:
-            pitch_path = pitch_files[0]
-        else:
-            raise FileNotFoundError(f"Missing .pitch.txt file in {raag_folder}")
-
-        if sections_files:
-            sections_path = sections_files[0]
-        else:
-            raise FileNotFoundError(f"Missing .sections-manual-p.txt file in {raag_folder}")
+        with open(file_path, 'r') as file:
+            lines = [line.strip() for line in file]
             
-        print(f"  ctonic_path: {ctonic_path}") # Debugging
-        print(f"  pitch_path: {pitch_path}")   # Debugging
-        print(f"  sections_path: {sections_path}") # Debugging
+        
+        pitch_data = []
+        for line in lines:
+            try:
+                pitch = float(line)
+                svara = hz_to_svara(pitch, tonic_hz)
+                pitch_data.append(svara)
+            except ValueError:
+                logging.warning(f"Skipping invalid line: {line}")
+                continue
 
-        # Load data
-        tonic_hz = load_tonic(ctonic_path)
-        pitch_data = load_pitch_data(pitch_path)
-        sections = load_sections(sections_path)
-               
-        # Convert to symbolic representation
-        note_sequence = []
-        for t, freq in pitch_data:
-            svara = hz_to_svara(freq, tonic_hz)
-            if svara:
-                note_sequence.append({"time": t, "svara": svara, "duration": 0.1})
-        
-        # Add sections to the sequence
-        for start, end, label in sections:
-            note_sequence.append({
-                "time": start,
-                "section": label,
-                "type": "section_start"
-            })
-        
-        return note_sequence
+        return pitch_data
     except Exception as e:
-        logging.error(f"Error processing {raag_folder}: {str(e)}")
-        return []
+        logging.error(f"Error loading pitch data from {file_path}: {e}")
+        return None
 
+def load_sections(file_path):
+        """Loads sections from a text file."""
+        try:
+            with open(file_path, 'r') as file:
+                sections = [line.strip() for line in file]
+            return sections
+        except Exception as e:
+            logging.error(f"Error loading sections from {file_path}: {e}")
+            return None
 
-def load_and_preprocess_data(dataset_path):
-    """Loads data from specified path and performs necessary preprocessing."""
-    logging.info(f"Loading and preprocessing data from: {dataset_path}")
-    output = []
-    for root, dirs, files in os.walk(dataset_path):
-        for dir in dirs:
-            raag_folder = os.path.join(root, dir)
-            output.extend(preprocess_raag(raag_folder))
-    logging.info(f"Finished loading and preprocessing, {len(output)} total entries.")
-    return output
+def hz_to_svara(frequency_hz, tonic_hz):
+    """Converts frequency in Hz to a svara string."""
+    if not frequency_hz or frequency_hz == 0 or not tonic_hz or tonic_hz == 0 :
+        return None
+    
+    ratios = {
+        "Sa": 1,
+        "Re": 9/8,
+        "Ga": 5/4,
+        "Ma": 4/3,
+        "Pa": 3/2,
+        "Dha": 5/3,
+        "Ni": 15/8
+    }
+    
+    
+    if frequency_hz is None:
+      return None
+    
+    
+    svara_mapping = {}
+    for svara, ratio in ratios.items():
+        svara_freq = tonic_hz * ratio
+        svara_mapping[svara] = svara_freq
+    
+    closest_svara = None
+    min_diff = float('inf')
+    
+    for svara, svara_freq in svara_mapping.items():
+      diff = abs(frequency_hz - svara_freq)
+      if diff < min_diff:
+          min_diff = diff
+          closest_svara = svara
 
-def extract_all_notes(output):
+    if closest_svara is not None:
+        return closest_svara
+    else:
+      return None
+
+def preprocess_raag(raag_dir, sa_file, pitch_file, sections_file):
+    """Preprocesses the data for a given raag."""
+    tonic_path = os.path.join(raag_dir, sa_file)
+    pitch_path = os.path.join(raag_dir, pitch_file)
+    sections_path = os.path.join(raag_dir, sections_file)
+
+    tonic_hz = load_tonic(tonic_path)
+    if tonic_hz is None:
+      logging.error(f"Failed to load tonic for {raag_dir}")
+      return None
+    
+    pitch_data = load_pitch_data(pitch_path, tonic_hz)
+    if pitch_data is None:
+      logging.error(f"Failed to load pitch data for {raag_dir}")
+      return None
+    
+    sections = load_sections(sections_path)
+    if sections is None:
+      logging.error(f"Failed to load sections for {raag_dir}")
+      return None
+      
+    if len(sections) != len(pitch_data):
+         logging.error(f"Length mismatch between sections and pitch data for {raag_dir}")
+         return None
+
+    return list(zip(sections, pitch_data))
+
+def extract_all_notes(all_output):
+    """Extracts all notes from the preprocessed data."""
+    logging.info("Extracting all notes...")
     all_notes = []
-    for entry in output:
-        if "svara" in entry:
-            all_notes.append(entry["svara"])
-        elif "section" in entry:
-            all_notes.append(entry["section"])
+    if not all_output:
+        logging.warning("all_output is empty, no notes to extract")
+        return []
+    for raag_data in all_output:
+        if raag_data is None:
+            logging.warning("Skipping None raag_data")
+            continue
+        for section, note in raag_data:
+            if note is not None:
+              all_notes.append(note)
+            else:
+              logging.warning(f"Skipping None note in section {section}")
+    logging.info(f"Extracted {len(all_notes)} notes")
     return all_notes
 
 def create_tokenizer(all_notes):
-    """Creates and fits a Tokenizer, checks if all_notes is empty"""
+    """Creates a tokenizer from the list of all notes."""
     if not all_notes:
-        logging.warning("No notes found, tokenizer will not be fitted.")
-        return None  # Or raise an exception, depending on how you want to handle it
-    tokenizer = Tokenizer(
-        filters='',
-        lower=False,
-        oov_token="<UNK>",
-        split=None,
-        char_level=False
-    )
+        logging.error("No notes to create tokenizer")
+        return None
+    
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(filters='', oov_token="<unk>")
     tokenizer.fit_on_texts(all_notes)
+    logging.info("Tokenizer created")
     return tokenizer
 
 def create_sequences(tokenizer, all_notes, sequence_length):
@@ -175,59 +166,81 @@ def create_sequences(tokenizer, all_notes, sequence_length):
     logging.info("Sequences creation complete")
     return X, y
 
-def extract_raag_names(folder_name):
-    """Extract raag names from folder names."""
-    import re
-    folder_name = re.sub(r'\bby\b.*|\b&\b.*|\(.*?\)|\[.*?\]', '', folder_name, flags=re.IGNORECASE)
-    raags = []
-    for part in re.split(r',|&|/|_', folder_name):
-        part = part.strip()
-        if part and len(part) > 3:
-            raags.append(part.title().strip())
-    return list(set(raags))
+def extract_raag_names(root_path):
+    """Extracts the raag names from the dataset directory."""
+    raag_names = []
+    for item in os.listdir(root_path):
+        item_path = os.path.join(root_path, item)
+        if os.path.isdir(item_path):
+           raag_names.append(item)
+    return raag_names
 
 def create_raag_id_mapping(root_path):
-    all_raag_names = set()
-    for root, dirs, files in os.walk(root_path):
-        for dir_name in dirs:
-            if "Raag" in dir_name:
-                extracted_raags = extract_raag_names(dir_name)
-                all_raag_names.update(extracted_raags)
-    
-    unique_raags = sorted(list(all_raag_names))
-    raag_id_dict = {raag: idx for idx, raag in enumerate(unique_raags)}
-    return raag_id_dict, len(all_raag_names)
+    """Creates a mapping from raag names to unique integer IDs."""
+    raag_names = extract_raag_names(root_path)
+    raag_id_dict = {raag: i for i, raag in enumerate(raag_names)}
+    return raag_id_dict, len(raag_id_dict)
 
 def generate_raag_labels(root_path, X, all_notes, raag_id_dict, num_raags):
-        import numpy as np
-        logging.info("Generating raag labels...")
-        raag_labels = []
-        
-        all_output = []
-        for root, dirs, files in os.walk(root_path):
-            for dir in dirs:
-                if "Raag" in dir:
-                    raag_folder = os.path.join(root, dir)
-                    output = preprocess_raag(raag_folder)
-                    if output:
-                        all_output.append(output)
+    """Generates raag labels for each sequence."""
+    logging.info("Generating raag labels...")
+    raag_labels = np.zeros(len(X), dtype='int32') # Initialize as 0s
+    if not all_notes:
+        logging.warning("No notes, cannot generate raag labels")
+        return raag_labels
+    
+    current_note_index = 0
+    
+    for raag_name, raag_id in raag_id_dict.items():
+      
+      raag_path = os.path.join(root_path, raag_name)
+      
+      sa_file = [f for f in os.listdir(raag_path) if f.endswith(".sa.txt")]
+      pitch_file = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
+      sections_file = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
+      
+      if len(sa_file) == 0 or len(pitch_file) == 0 or len(sections_file) == 0:
+          logging.warning(f"skipping raag {raag_name}")
+          continue
+      
+      preprocessed_data = preprocess_raag(raag_path, sa_file[0], pitch_file[0], sections_file[0])
 
-        output_index = 0
-        for root, dirs, files in os.walk(root_path):
-            for dir_name in dirs:
-                if "Raag" in dir_name:
-                  raag_names = extract_raag_names(dir_name)
-                  if raag_names:
-                      raag_id_value = raag_id_dict.get(raag_names[0], 0)
-                      num_notes_for_raag = 0
-                      
-                      #Count notes for current raag
-                      if output_index < len(all_output):
-                          num_notes_for_raag = len(all_output[output_index])
-                      
-                      raag_labels.extend([raag_id_value] * num_notes_for_raag)
-                      output_index +=1
+      if preprocessed_data is None:
+          logging.warning(f"Failed to load data for {raag_name}")
+          continue
 
-        raag_labels = np.pad(raag_labels, (0, len(X) - len(raag_labels)), 'constant')
-        logging.info("Raag labels generated successfully")
-        return np.array(raag_labels)
+      extracted_notes = [note for _, note in preprocessed_data if note is not None]
+    
+      for i in range(len(extracted_notes)):
+        if current_note_index < len(all_notes) and all_notes[current_note_index] == extracted_notes[i]:
+           raag_labels[current_note_index] = raag_id
+           current_note_index += 1
+        if current_note_index >= len(all_notes):
+          break;
+    logging.info("Raag labels generated")
+    return raag_labels
+
+
+def load_and_preprocess_data(dataset_path):
+    """Loads and preprocesses all raag data."""
+    logging.info("Starting data loading and preprocessing...")
+    all_output = []
+    
+    for item in os.listdir(dataset_path):
+        item_path = os.path.join(dataset_path, item)
+        if os.path.isdir(item_path):
+            sa_file = [f for f in os.listdir(item_path) if f.endswith(".sa.txt")]
+            pitch_file = [f for f in os.listdir(item_path) if f.endswith(".pitch.txt")]
+            sections_file = [f for f in os.listdir(item_path) if f.endswith(".sections-manual-p.txt")]
+            
+            if len(sa_file) == 0 or len(pitch_file) == 0 or len(sections_file) == 0:
+              logging.error(f"Missing required files in {item_path}")
+              continue
+            
+            preprocessed = preprocess_raag(item_path, sa_file[0], pitch_file[0], sections_file[0])
+            if preprocessed is not None:
+              all_output.append(preprocessed)
+            else:
+              logging.error(f"Error preprocessing {item_path}")
+    logging.info(f"Finished loading and preprocessing, {sum([len(x) for x in all_output if x is not None])} total entries.")
+    return all_output
