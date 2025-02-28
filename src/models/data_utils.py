@@ -28,6 +28,7 @@ def load_pitch_data(file_path, tonic_hz):
         
         pitch_data = []
         for line in lines:
+            print(f"Processing line: {line}") # Debugging print statement
             try:
                 pitch = float(line)
                 svara = hz_to_svara(pitch, tonic_hz)
@@ -40,7 +41,7 @@ def load_pitch_data(file_path, tonic_hz):
     except Exception as e:
         logging.error(f"Error loading pitch data from {file_path}: {e}")
         return None
-
+    
 def load_sections(file_path):
         """Loads sections from a text file."""
         try:
