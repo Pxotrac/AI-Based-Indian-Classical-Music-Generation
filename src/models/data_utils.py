@@ -135,20 +135,22 @@ def load_and_preprocess_data(root_path):
         raag_path = os.path.join(root_path, raag_dir) # Create the full path to the raag directory
         if os.path.isdir(raag_path): # Check to ensure it is a directory
             # Construct paths to files inside the raag directory
-            sa_file = [f for f in os.listdir(raag_path) if f.endswith(".sa.txt")]
-            pitch_file = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
-            sections_file = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
             
-            if len(sa_file) == 0 or len(pitch_file) == 0 or len(sections_file) == 0:
+            sa_files = [f for f in os.listdir(raag_path) if f.endswith(".ctonic.txt")]
+            pitch_files = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
+            sections_files = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
+
+            if not sa_files or not pitch_files or not sections_files:
                 logging.warning(f"skipping raag {raag_dir} due to missing files")
                 continue
             
             print(f"Preprocessing raag: {raag_dir}") # Debugging print statement
-            output = preprocess_raag(raag_path, sa_file[0], pitch_file[0], sections_file[0]) # Call preprocess raag using the data files for that directory
+            print(f"sa_file: {sa_files[0]}, pitch_file: {pitch_files[0]}, sections_file: {sections_files[0]}")
+            output = preprocess_raag(raag_path, sa_files[0], pitch_files[0], sections_files[0]) # Call preprocess raag using the data files for that directory
             if output:
                 all_output.append(output)
+    print(f"All output: {all_output}")
     return all_output
-
 
 def extract_all_notes(all_output):
     """Extracts all notes from the preprocessed data."""
@@ -230,7 +232,7 @@ def generate_raag_labels(root_path, X, all_notes, raag_id_dict, num_raags):
     for raag_name, raag_id in raag_id_dict.items():
         raag_path = os.path.join(root_path, raag_name)
         
-        sa_file = [f for f in os.listdir(raag_path) if f.endswith(".sa.txt")]
+        sa_file = [f for f in os.listdir(raag_path) if f.endswith(".ctonic.txt")]
         pitch_file = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
         sections_file = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
         
