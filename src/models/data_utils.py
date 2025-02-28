@@ -132,10 +132,17 @@ def load_and_preprocess_data(root_path):
     """
     print(f"Loading data from: {root_path}") # Debugging print statement
     all_output = []
+    
+    raag_count = 0 # initialize raag count
+    
     for artist_dir in os.listdir(root_path): # Iterate through the directories in the root directory (i.e. the artists)
         artist_path = os.path.join(root_path, artist_dir) # Create the full path to the artist directory
         if os.path.isdir(artist_path): # Check to ensure it is a directory
             for raag_dir in os.listdir(artist_path): # Iterate through the directories in the artist directory (i.e. the raags)
+                if raag_count >= 2: # only load data for the first 2 raags
+                    print("Loaded data for 2 raags. Stopping loading more data")
+                    break
+                
                 raag_path = os.path.join(artist_path, raag_dir)
                 if os.path.isdir(raag_path): # Check to ensure it is a directory
                     # Construct paths to files inside the raag directory
@@ -152,6 +159,10 @@ def load_and_preprocess_data(root_path):
                     output = preprocess_raag(raag_path, sa_files[0], pitch_files[0], sections_files[0]) # Call preprocess raag using the data files for that directory
                     if output:
                         all_output.append(output)
+                        raag_count += 1 # increment the raag count after loading
+            if raag_count >=2: # break out of the loop after loading data for the first 2 raags
+              break
+
     print(f"All output: {all_output}")
     return all_output
 
