@@ -62,7 +62,7 @@ oauthlib==3.2.2
 opt_einsum==3.4.0
 packaging==23.2
 pandas==2.2.0
-pandas-profiling==3.6.6
+pandas-profiling
 patsy==1.0.1
 phik==0.12.4
 pillow==11.1.0
