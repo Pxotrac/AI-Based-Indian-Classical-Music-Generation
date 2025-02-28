@@ -5,6 +5,7 @@ import pretty_midi
 import re
 from collections import Counter
 import yaml
+import tensorflow as tf
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -122,6 +123,32 @@ def preprocess_raag(raag_dir, sa_file, pitch_file, sections_file):
          return None
 
     return list(zip(sections, pitch_data))
+
+def load_and_preprocess_data(root_path):
+    """
+    Loads and preprocesses all raag data in the given root directory.
+    This function now expects a root directory containing subdirectories for each raag.
+    """
+    print(f"Loading data from: {root_path}") # Debugging print statement
+    all_output = []
+    for raag_dir in os.listdir(root_path): # Iterate through the directories in the root directory
+        raag_path = os.path.join(root_path, raag_dir) # Create the full path to the raag directory
+        if os.path.isdir(raag_path): # Check to ensure it is a directory
+            # Construct paths to files inside the raag directory
+            sa_file = [f for f in os.listdir(raag_path) if f.endswith(".sa.txt")]
+            pitch_file = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
+            sections_file = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
+            
+            if len(sa_file) == 0 or len(pitch_file) == 0 or len(sections_file) == 0:
+                logging.warning(f"skipping raag {raag_dir} due to missing files")
+                continue
+            
+            print(f"Preprocessing raag: {raag_dir}") # Debugging print statement
+            output = preprocess_raag(raag_path, sa_file[0], pitch_file[0], sections_file[0]) # Call preprocess raag using the data files for that directory
+            if output:
+                all_output.append(output)
+    return all_output
+
 
 def extract_all_notes(all_output):
     """Extracts all notes from the preprocessed data."""
