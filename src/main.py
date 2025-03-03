@@ -6,9 +6,9 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels
-from music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
-from model_builder import create_model
+from src.models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels
+from src.models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
+from src.models.model_builder import create_model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tqdm import tqdm  # Import tqdm for progress bars
 
