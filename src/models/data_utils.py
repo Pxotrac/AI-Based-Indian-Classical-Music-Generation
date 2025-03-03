@@ -10,28 +10,48 @@ from tqdm import tqdm  # Import tqdm for progress bars
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def load_tonic(filename):
-    """Loads the tonic (Sa) frequency from the filename."""
-    match = re.search(r"_([0-9.]+)hz_", filename)
-    if match:
-        return float(match.group(1))
-    return None
+def load_tonic(filepath):
+    """Loads the tonic (Sa) frequency from the .ctonic.txt file."""
+    tonic_file = os.path.splitext(filepath)[0] + ".ctonic.txt"  
+    try:
+        with open(tonic_file, 'r') as f:
+            tonic_hz_str = f.readline().strip()  # Read the first line and remove whitespace
+            tonic_hz = float(tonic_hz_str)  # Convert to float
+            return tonic_hz
+    except FileNotFoundError:
+        logging.warning(f"Tonic file not found: {tonic_file}")
+        return None
+    except ValueError:
+        logging.warning(f"Invalid tonic value in file: {tonic_file}")
+        return None
 
-def load_pitch_data(midi_data):
-    """Extracts pitch information from pretty_midi.PrettyMIDI object."""
-    pitches = []
-    for instrument in midi_data.instruments:
-        for note in instrument.notes:
-            pitches.append(note.pitch)
-    return pitches
 
-def load_sections(filename):
-    """Loads section markers (if any) from the filename."""
-    sections = []
-    match = re.search(r"_(.*)_", filename)  # Assuming section markers are between underscores
-    if match:
-        sections = match.group(1).split("|")  # Assuming sections are separated by pipes
-    return sections
+def load_pitch_data(filepath):
+    """Extracts pitch information from the .pitch.txt file."""
+    pitch_file = os.path.splitext(filepath)[0] + ".pitch.txt"  
+    try:
+        with open(pitch_file, 'r') as f:
+            pitches = [float(line.strip()) for line in f]  # Assuming one pitch per line
+            return pitches
+    except FileNotFoundError:
+        logging.warning(f"Pitch file not found: {pitch_file}")
+        return None
+    except ValueError:
+        logging.warning(f"Invalid pitch value in file: {pitch_file}")
+        return None
+
+
+def load_sections(filepath):
+    """Loads section markers from the .sections-manual-p.txt file."""
+    sections_file = os.path.splitext(filepath)[0] + ".sections-manual-p.txt"  
+    try:
+        with open(sections_file, 'r') as f:
+            sections_str = f.readline().strip()  # Read the first line
+            sections = sections_str.split("|")  # Split by pipe symbol
+            return sections
+    except FileNotFoundError:
+        logging.warning(f"Sections file not found: {sections_file}")
+        return None
         
 def hz_to_svara(frequency_hz, tonic_hz):
     """Converts frequency in Hz to a svara string."""
@@ -97,39 +117,35 @@ def preprocess_raag(raag_dir, sa_file, pitch_file, sections_file):
 
     return list(zip(sections, pitch_data))
 
+def load_and_preprocess_data(root_path, max_raags=None):
+        print(f"Loading data from: {root_path}")
+        all_output = []
+        raag_count = 0
 
-def load_and_preprocess_data(root_path, max_raags=2):
-    """Loads and preprocesses raag data, limiting the number of raags loaded."""
-    print(f"Loading data from: {root_path}")
-    all_output = []
-    raag_count = 0
+        for root, _, files in os.walk(root_path):
+            for filename in files:
+                if filename.endswith(".mp3.mp3"):
+                    filepath = os.path.join(root, filename)
+                    try:
+                        raag_name = os.path.basename(os.path.dirname(filepath))
 
-    for artist_dir in tqdm(os.listdir(root_path), desc="Processing Artists"):
-        artist_path = os.path.join(root_path, artist_dir)
-        if os.path.isdir(artist_path):
-            for raag_dir in os.listdir(artist_path):
-                if raag_count >= max_raags:
-                    logging.info(f"Loaded data for {max_raags} raags. Stopping.")
-                    break
+                        # Use 'filepath' (the full path) when loading data:
+                        tonic_hz = load_tonic(filepath) 
+                        pitch_data = load_pitch_data(filepath)
+                        sections = load_sections(filepath)
 
-                raag_path = os.path.join(artist_path, raag_dir)
-                if os.path.isdir(raag_path):
-                    # Find data files
-                    sa_files = [f for f in os.listdir(raag_path) if f.endswith(".ctonic.txt")]
-                    pitch_files = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
-                    sections_files = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
-
-                    if not sa_files or not pitch_files or not sections_files:
-                        logging.warning(f"Skipping raag {raag_dir} due to missing files.")
-                        continue
-
-                    logging.info(f"Preprocessing raag: {raag_dir}")
-                    output = preprocess_raag(raag_path, sa_files[0], pitch_files[0], sections_files[0])
-
-                    if output:
-                        all_output.extend(output)  # Extend all_output with preprocessed raag data
+                        processed_data = {
+                            'raag': raag_name,
+                            'tonic': tonic_hz,
+                            'notes': pitch_data,
+                            'sections': sections,
+                        }
+                        all_output.append(processed_data)
                         raag_count += 1
 
+                    except Exception as e:
+                        logging.error(f"Error processing file {filepath}: {e}")
+                        
     logging.info(f"Total raags processed: {raag_count}")
     print(f"Total raags processed: {raag_count}")  # Print total raags processed
     return all_output  # Return the accumulated preprocessed data
@@ -188,50 +204,28 @@ def extract_raag_names(all_output):
             raag_names.add(song_data['raag'])  # Add raag name to the set
     return list(raag_names)  # Convert the set back to a list
 
+def create_raag_id_mapping(all_output):
+        """Creates a mapping from raag names to unique integer IDs."""
+        raag_names = list({d['raag'] for d in all_output})  # Get unique raag names
+        raag_id_dict = {raag: i for i, raag in enumerate(raag_names)}
+        return raag_id_dict, len(raag_id_dict)
 
-def create_raag_id_mapping(raag_names):
-    """Creates a mapping from raag names to unique integer IDs."""
-    raag_id_dict = {raag: i for i, raag in enumerate(raag_names)}
-    return raag_id_dict, len(raag_id_dict)
+def generate_raag_labels(all_output, raag_id_dict, num_raags):
+        """Generates raag labels for each data point in all_output."""
+        logging.info("Generating raag labels...")
+        raag_labels = []  # List to store raag labels
 
+        for data_point in all_output:  # Iterate through your preprocessed data
+            raag_name = data_point['raag']
+            
+            # Get raag ID, handle unknown raags
+            raag_id = raag_id_dict.get(raag_name)
+            if raag_id is None:
+                logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
+                continue  # Skip if raag not in dictionary
 
-def generate_raag_labels(root_path, all_notes, raag_id_dict, num_raags):
-    """Generates raag labels for each sequence."""
-    logging.info("Generating raag labels...")
+            # Append the raag ID for each note in this data point
+            raag_labels.extend([raag_id] * len(data_point['notes'])) 
 
-    if not all_notes:
-        logging.warning("No notes, cannot generate raag labels.")
-        return np.zeros(len(all_notes), dtype='int32')  # Return zeros if no notes
-
-    raag_labels = np.zeros(len(all_notes), dtype='int32')  # Initialize as 0s
-    current_note_index = 0
-
-    for raag_name, raag_id in raag_id_dict.items():
-        raag_path = os.path.join(root_path, raag_name)
-
-        # Find data files (assuming one file per type)
-        sa_file = next((f for f in os.listdir(raag_path) if f.endswith(".ctonic.txt")), None)
-        pitch_file = next((f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")), None)
-        sections_file = next((f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")), None)
-
-        if not all([sa_file, pitch_file, sections_file]):
-            logging.warning(f"Skipping raag {raag_name} due to missing files.")
-            continue
-
-        preprocessed_data = preprocess_raag(raag_path, sa_file, pitch_file, sections_file)
-
-        if preprocessed_data is None:
-            logging.warning(f"Failed to load data for {raag_name}.")
-            continue
-
-        extracted_notes = [note for _, note in preprocessed_data if note is not None]
-
-        # Optimized label assignment using list slicing and comparison
-        num_matching_notes = len(extracted_notes)
-        if current_note_index + num_matching_notes <= len(all_notes) and \
-           all_notes[current_note_index: current_note_index + num_matching_notes] == extracted_notes:
-            raag_labels[current_note_index: current_note_index + num_matching_notes] = raag_id
-            current_note_index += num_matching_notes
-
-    logging.info(f"Generated {len(raag_labels)} raag labels.")
-    return raag_labels
+        logging.info("Raag labels generated.")
+        return np.array(raag_labels, dtype='int32')

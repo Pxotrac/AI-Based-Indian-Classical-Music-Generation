@@ -31,7 +31,6 @@ else:
 
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
-
 def main():
     # Load Config
     with open("config.yaml", "r") as f:

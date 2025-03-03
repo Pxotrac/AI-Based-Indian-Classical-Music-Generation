@@ -197,7 +197,7 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
         midi_mapping[note] = midi_num + 12 * int(round(np.log2(tonic_hz / 440)))  # Shift by octaves based on tonic_hz
 
     for _ in range(max_length - len(seed_sequence)):
-        input_sequence = np.array([generated_sequence[-sequence_length:]])
+        input_sequence = np.array([generated_sequence[-sequence_length:]])  # Adjust if needed
         raag_input = np.array([[raag_id]])
 
         # Predict the next note
@@ -210,28 +210,26 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
         top_k = min(top_k, vocab_size)
         indices = np.argpartition(prediction[0], -top_k)[-top_k:]
         probabilities = prediction[0][indices]
-        probabilities = probabilities / np.sum(probabilities)
+        probabilities = probabilities / np.sum(probabilities)  # Normalize probabilities
 
         # Sample from top-k tokens
-        next_token = np.random.choice(indices, p=probabilities)
+        next_token = np.random.choice(indices, p=probabilities)  
         generated_sequence.append(next_token)
 
-    # Convert tokens to MIDI
-    midi = pretty_midi.PrettyMIDI(initial_tempo=120)
-    instrument = pretty_midi.Instrument(program=0)
-    current_time = 0
-    for token in generated_sequence:
-        note_name = tokenizer.index_word.get(token)
-        midi_note = midi_mapping.get(note_name)
-        if midi_note is not None:
-            note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
-            instrument.notes.append(note)
-            current_time += 0.5
 
-    midi.instruments.append(instrument)
-    midi.write(f"generated_music_raag_{raag_id}_with_tonic.mid")  # Save with a different filename
-    logging.info("Generated music with tonic and saved to MIDI")
-    return generated_sequence
+# Convert generated sequence to MIDI
+midi = pretty_midi.PrettyMIDI(initial_tempo=120)
+instrument = pretty_midi.Instrument(program=0)
+current_time = 0
+for token in generated_sequence:
+    note_name = tokenizer.index_word.get(token)  # Get note name from token
+    if note_name in midi_mapping:  # Check if it's a valid note
+        midi_note = midi_mapping[note_name]
+        note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
+        instrument.notes.append(note)
+        current_time += 0.5
+midi.instruments.append(instrument)
+midi.write(f"generated_music_raag_{raag_id}_with_tonic.mid")
 
 def generate_random_seed(tokenizer, sequence_length):
     """Generates a random seed sequence of specified length from the vocabulary of the tokenizer."""
