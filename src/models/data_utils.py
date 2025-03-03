@@ -94,38 +94,34 @@ def hz_to_svara(frequency_hz, tonic_hz):
 
 def load_and_preprocess_data(root_path, max_raags=None):
     print(f"Loading data from: {root_path}")
-    all_output = []
-    raag_count = 0
+    all_output = []  # Initialize the list to store all processed data
+    raag_count = 0  # Initialize a counter for the number of raags processed
 
-    for root, _, files in os.walk(root_path):
-        for filename in files:
-            if filename.endswith(".mp3.mp3"):
-                filepath = os.path.join(root, filename)
-                try:
-                    raag_name = os.path.basename(os.path.dirname(filepath))
+    # Iterate over all subdirectories in the root_path
+    for subdir, _, files in os.walk(root_path):
+        # Check if the subdirectory is one level below the root directory
+        if os.path.normpath(subdir).count(os.sep) - os.path.normpath(root_path).count(os.sep) >= 2:
+            for file in files:
+                # Check if the file is a .mp3.mp3 file
+                if file.endswith(".mp3.mp3"):
+                    try:
+                        filepath = os.path.join(subdir, file)  # Full path to the file
+                        raag_name = os.path.basename(os.path.dirname(filepath))  # Raag name is the subdirectory name
 
-                    # Use 'filepath' (the full path) when loading data:
-                    tonic_hz = load_tonic(filepath)
-                    pitch_data = load_pitch_data(filepath)
-                    sections = load_sections(filepath)
+                        # Load data based on the current 'filepath'
+                        tonic_hz = load_tonic(filepath)
+                        pitch_data = load_pitch_data(filepath)
+                        sections = load_sections(filepath)
 
-                    pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]
-                    processed_data = {
-                        'raag': raag_name,
-                        'tonic': tonic_hz,
-                        'notes': pitch_data,
-                        'sections': sections,
-                    }
-                    all_output.append(processed_data)
-                    raag_count += 1
-
-                except Exception as e:
-                    logging.error(f"Error processing file {filepath}: {e}")
-
-    logging.info(f"Total raags processed: {raag_count}")
+                        pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]  # Convert pitches to svaras
+                        processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}  # Create data dictionary
+                        all_output.append(processed_data)  # Add the processed data to the output list
+                        raag_count += 1  # Increment the raag counter
+                    except Exception as e:
+                        logging.error(f"Error processing file {filepath}: {e}")  # Log an error if a file fails
+    logging.info(f"Total raags processed: {raag_count}")  # Log the total number of raags processed
     print(f"Total raags processed: {raag_count}")  # Print total raags processed
-    return all_output  # Return the accumulated preprocessed data
-
+    return all_output
 
 def extract_all_notes(all_output):
     """Extracts all notes from the preprocessed data."""

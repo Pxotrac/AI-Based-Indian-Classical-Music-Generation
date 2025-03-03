@@ -1,4 +1,4 @@
-dataset_path: "/content/drive/MyDrive/hindustani/hindustani"  # Added colon
+dataset_path: "/content/drive/MyDrive/hindustani"  # Added colon
 sequence_length: 50
 epochs: 100
 batch_size: 64
