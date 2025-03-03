@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def load_tonic(filepath):
     """Loads the tonic (Sa) frequency from the .ctonic.txt file."""
-    tonic_file = os.path.splitext(filepath)[0] + ".ctonic.txt"  
+    tonic_file = os.path.splitext(filepath)[0] + ".ctonic.txt"
     try:
         with open(tonic_file, 'r') as f:
             tonic_hz_str = f.readline().strip()  # Read the first line and remove whitespace
@@ -47,7 +47,7 @@ def load_pitch_data(filepath):
 
 def load_sections(filepath):
     """Loads section markers from the .sections-manual-p.txt file."""
-    sections_file = os.path.splitext(filepath)[0] + ".sections-manual-p.txt"  
+    sections_file = os.path.splitext(filepath)[0] + ".sections-manual-p.txt"
     try:
         with open(sections_file, 'r') as f:
             sections_str = f.readline().strip()  # Read the first line
@@ -202,6 +202,8 @@ def generate_raag_labels(all_output, raag_id_dict, num_raags):
             if raag_id is None:
                 logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
                 continue  # Skip this data point if the raag_id is not found
+            if not data_point.get("notes"):
+                continue
             
             notes_count = len(data_point['notes'])  # Get the number of notes in the data point
             raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
