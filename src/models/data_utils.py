@@ -24,11 +24,13 @@ def load_tonic(filepath):
     except ValueError:
         logging.warning(f"Invalid tonic value in file: {tonic_file}")
         return None
-
+    except Exception as e:
+        logging.error(f"Error loading file {tonic_file}: {e}")
+        return None
 
 def load_pitch_data(filepath):
     """Extracts pitch information from the .pitch.txt file."""
-    pitch_file = os.path.splitext(filepath)[0] + ".pitch.txt"  
+    pitch_file = os.path.splitext(filepath)[0] + ".pitch.txt"
     try:
         with open(pitch_file, 'r') as f:
             pitches = [float(line.strip()) for line in f]  # Assuming one pitch per line
@@ -39,7 +41,9 @@ def load_pitch_data(filepath):
     except ValueError:
         logging.warning(f"Invalid pitch value in file: {pitch_file}")
         return None
-
+    except Exception as e:
+        logging.error(f"Error loading file {pitch_file}: {e}")
+        return None
 
 def load_sections(filepath):
     """Loads section markers from the .sections-manual-p.txt file."""
@@ -51,6 +55,9 @@ def load_sections(filepath):
             return sections
     except FileNotFoundError:
         logging.warning(f"Sections file not found: {sections_file}")
+        return None
+    except Exception as e:
+        logging.error(f"Error loading file {sections_file}: {e}")
         return None
         
 def hz_to_svara(frequency_hz, tonic_hz):
@@ -102,8 +109,8 @@ def load_and_preprocess_data(root_path, max_raags=None):
         # Check if the subdirectory is one level below the root directory
         if os.path.normpath(subdir).count(os.sep) - os.path.normpath(root_path).count(os.sep) >= 2:
             for file in files:
-                # Check if the file is a .mp3.mp3 file
-                if file.endswith(".mp3.mp3"):
+                # Check if the file is a .mp3 file
+                if file.endswith(".mp3") and not file.endswith(".mp3.md5"):
                     try:
                         filepath = os.path.join(subdir, file)  # Full path to the file
                         raag_name = os.path.basename(os.path.dirname(filepath))  # Raag name is the subdirectory name
@@ -111,9 +118,9 @@ def load_and_preprocess_data(root_path, max_raags=None):
                         # Load data based on the current 'filepath'
                         tonic_hz = load_tonic(filepath)
                         pitch_data = load_pitch_data(filepath)
-                        sections = load_sections(filepath)
-
-                        pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]  # Convert pitches to svaras
+                        sections = load_sections(filepath)  # Corrected line
+                        if pitch_data:
+                            pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]  # Convert pitches to svaras
                         processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}  # Create data dictionary
                         all_output.append(processed_data)  # Add the processed data to the output list
                         raag_count += 1  # Increment the raag counter
@@ -184,23 +191,24 @@ def create_raag_id_mapping(all_output):
 
 def generate_raag_labels(all_output, raag_id_dict, num_raags):
         """Generates raag labels for each data point in all_output."""
-        logging.info("Generating raag labels...")
-        raag_labels = []  # List to store raag labels
+        logging.info("Generating raag labels")
+        all_raag_labels = []  # To collect raag labels for all notes
 
-        for data_point in all_output:  # Iterate through your preprocessed data
-            raag_name = data_point['raag']
+        for data_point in all_output:
+            raag_name = data_point['raag']  # Corrected: Access 'raag' directly
             
-            # Get raag ID, handle unknown raags
+            # Correctly look up the raag_id
             raag_id = raag_id_dict.get(raag_name)
             if raag_id is None:
                 logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
-                continue  # Skip if raag not in dictionary
+                continue  # Skip this data point if the raag_id is not found
+            
+            notes_count = len(data_point['notes'])  # Get the number of notes in the data point
+            raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
+            all_raag_labels.extend(raag_labels)
 
-            # Append the raag ID for each note in this data point
-            raag_labels.extend([raag_id] * len(data_point['notes'])) 
-
-        logging.info("Raag labels generated.")
-        return np.array(raag_labels, dtype='int32')
+        logging.info("Raag labels generated")
+        return np.array(all_raag_labels, dtype='int32')
     
 def tokenize_sequence(tokenizer, sequence):
     notes = sequence[:-1]
