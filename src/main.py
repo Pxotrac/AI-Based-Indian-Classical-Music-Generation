@@ -25,7 +25,21 @@ def main():
     batch_size = config['batch_size']
     validation_split = config['validation_split']
     patience = config['patience']
+    # Data Preprocessing with Chunking and Status Updates
     
+    logging.info("Starting data preprocessing...")
+    print("Starting data preprocessing...")
+    start_time = time.time()  # Start timer
+    all_notes = []
+
+    for i, chunk_output in enumerate(load_and_preprocess_data(dataset_path, chunk_size=2)):
+        chunk_notes = extract_all_notes(chunk_output)
+        all_notes.extend(chunk_notes)
+
+        # Status Updates and Time Estimation
+        elapsed_time = time.time() - start_time
+        logging.info(f"Processed chunk {i + 1}, elapsed time: {elapsed_time:.2f} seconds")
+        print(f"Processed chunk {i + 1}, elapsed time: {elapsed_time:.2f} seconds")
     # Determine model save path
     model_save_name = "my_model_name"
     model_save_path = f"{model_save_name}.keras"

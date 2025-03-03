@@ -130,38 +130,45 @@ def load_and_preprocess_data(root_path):
     Loads and preprocesses all raag data in the given root directory.
     This function now expects a root directory containing subdirectories for each raag.
     """
-    print(f"Loading data from: {root_path}") # Debugging print statement
+    print(f"Loading data from: {root_path}")  # Debugging print statement
     all_output = []
     
-    raag_count = 0 # initialize raag count
+    raag_count = 0  # initialize raag count
     
-    for artist_dir in os.listdir(root_path): # Iterate through the directories in the root directory (i.e. the artists)
-        artist_path = os.path.join(root_path, artist_dir) # Create the full path to the artist directory
-        if os.path.isdir(artist_path): # Check to ensure it is a directory
-            for raag_dir in os.listdir(artist_path): # Iterate through the directories in the artist directory (i.e. the raags)
-                if raag_count >= 2: # only load data for the first 2 raags
+    for artist_dir in os.listdir(root_path):  # Iterate through the directories in the root directory (i.e. the artists)
+        artist_path = os.path.join(root_path, artist_dir)  # Create the full path to the artist directory
+        if os.path.isdir(artist_path):  # Check to ensure it is a directory
+            for raag_dir in os.listdir(artist_path):  # Iterate through the directories in the artist directory (i.e. the raags)
+                if raag_count >= 2:  # only load data for the first 2 raags
                     print("Loaded data for 2 raags. Stopping loading more data")
                     break
                 
                 raag_path = os.path.join(artist_path, raag_dir)
-                if os.path.isdir(raag_path): # Check to ensure it is a directory
+                if os.path.isdir(raag_path):  # Check to ensure it is a directory
                     # Construct paths to files inside the raag directory
                     sa_files = [f for f in os.listdir(raag_path) if f.endswith(".ctonic.txt")]
                     pitch_files = [f for f in os.listdir(raag_path) if f.endswith(".pitch.txt")]
                     sections_files = [f for f in os.listdir(raag_path) if f.endswith(".sections-manual-p.txt")]
 
                     if not sa_files or not pitch_files or not sections_files:
-                        logging.warning(f"skipping raag {raag_dir} due to missing files")
+                        logging.warning(f"Skipping raag {raag_dir} due to missing files")
                         continue
 
-                    print(f"Preprocessing raag: {raag_dir}") # Debugging print statement
+                    print(f"Preprocessing raag: {raag_dir}")  # Debugging print statement
                     print(f"sa_file: {sa_files[0]}, pitch_file: {pitch_files[0]}, sections_file: {sections_files[0]}")
-                    output = preprocess_raag(raag_path, sa_files[0], pitch_files[0], sections_files[0]) # Call preprocess raag using the data files for that directory
+                    output = preprocess_raag(raag_path, sa_files[0], pitch_files[0], sections_files[0])  # Call preprocess raag using the data files for that directory
+                    
                     if output:
-                        all_output.append(output)
-                        raag_count += 1 # increment the raag count after loading
-            if raag_count >=2: # break out of the loop after loading data for the first 2 raags
-              break
+                        all_output.extend(output)
+                        raag_count += 1
+
+                if raag_count >= chunk_size:
+                    yield all_output
+                    all_output = []
+                    raag_count = 0
+
+    if all_output:
+        yield all_output
 
     print(f"All output: {all_output}")
     return all_output
