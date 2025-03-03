@@ -66,3 +66,53 @@ class RaagConditioning(tf.keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.sequence_length, input_shape[2])
+
+# Music Transformer Model ------------------------------------------------------
+class MusicTransformer(tf.keras.Model):
+    def __init__(self, num_notes, embedding_dim, num_heads, num_layers, sequence_length, raag_vocab_size, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding_layer = tf.keras.layers.Embedding(num_notes, embedding_dim)
+        self.raag_embedding_layer = tf.keras.layers.Embedding(raag_vocab_size, embedding_dim) 
+        self.transformer_blocks = [TransformerBlock(embedding_dim, num_heads) for _ in range(num_layers)]
+        self.dense_layer = tf.keras.layers.Dense(num_notes)  
+        self.raag_conditioning = RaagConditioning(sequence_length)  
+
+    def call(self, inputs, raag_id, training=False):  
+        # Note Embedding
+        note_embeddings = self.embedding_layer(inputs)
+
+        # Raag Embedding and Conditioning
+        raag_embeddings = self.raag_embedding_layer(raag_id)  
+        raag_embeddings = self.raag_conditioning(raag_embeddings)  
+
+        # Combine Embeddings 
+        x = note_embeddings + raag_embeddings  
+
+        # Transformer Blocks
+        for block in self.transformer_blocks:
+            x = block(x, training=training)  
+
+        # Output Layer
+        output = self.dense_layer(x)
+        return output
+
+# TPU Strategy -----------------------------------------------------------------
+try:
+    tpu = tf.distribute.cluster_resolver.TPUClusterResolver()  # TPU detection
+    logging.info('Running on TPU ', tpu.master())
+except ValueError:
+    tpu = None
+
+if tpu:
+    tf.config.experimental_connect_to_cluster(tpu)
+    tf.tpu.experimental.initialize_tpu_system(tpu)
+    strategy = tf.distribute.TPUStrategy(tpu)
+else:
+    strategy = tf.distribute.get_strategy()  # Default distribution strategy
+
+logging.info("REPLICAS: ", strategy.num_replicas_in_sync)
+
+# Chunking (if needed) ---------------------------------------------------------
+def chunk_sequence(sequence, chunk_size):
+    """Splits a sequence into chunks of a specified size."""
+    return [sequence[i:i + chunk_size] for i in range(0, len(sequence), chunk_size)]
