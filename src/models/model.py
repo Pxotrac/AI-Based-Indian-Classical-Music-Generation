@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow import keras  # Move to the top
 from tensorflow.keras.layers import LayerNormalization
 import logging
 
