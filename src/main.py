@@ -108,7 +108,7 @@ def main():
 
         # Callbacks
         early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-        checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True
+        checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True)
     # Music Generation with random seed
     logging.info("Generating Music with random seed...")
     seed_sequence = generate_random_seed(tokenizer, sequence_length)
