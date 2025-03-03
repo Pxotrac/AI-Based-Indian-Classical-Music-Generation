@@ -37,7 +37,7 @@ def main():
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
-    dataset_path = config['dataset_path']
+    dataset_path = config['dataset_path'] 
     sequence_length = config['sequence_length']
     epochs = config['epochs']
     batch_size = config['batch_size']
