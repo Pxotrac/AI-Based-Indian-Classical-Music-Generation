@@ -92,60 +92,35 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
       return None
 
-def preprocess_raag(raag_dir, sa_file, pitch_file, sections_file):
-    """Preprocesses the data for a given raag."""
-    tonic_path = os.path.join(raag_dir, sa_file)
-    pitch_path = os.path.join(raag_dir, pitch_file)
-    sections_path = os.path.join(raag_dir, sections_file)
-
-    tonic_hz = load_tonic(tonic_path)
-    if tonic_hz is None:
-        logging.error(f"Failed to load tonic for {raag_dir}")
-        return None
-
-    # Assuming you have functions to load pitch data and sections:
-    pitch_data = load_pitch_data(pitch_path, tonic_hz)  # Adjust if necessary
-    sections = load_sections(sections_path)
-
-    if pitch_data is None or sections is None:
-        logging.error(f"Failed to load data for {raag_dir}")
-        return None
-
-    if len(sections) != len(pitch_data):
-        logging.error(f"Length mismatch between sections and pitch data for {raag_dir}")
-        return None
-
-    return list(zip(sections, pitch_data))
-
 def load_and_preprocess_data(root_path, max_raags=None):
-        print(f"Loading data from: {root_path}")
-        all_output = []
-        raag_count = 0
+    print(f"Loading data from: {root_path}")
+    all_output = []
+    raag_count = 0
 
-        for root, _, files in os.walk(root_path):
-            for filename in files:
-                if filename.endswith(".mp3.mp3"):
-                    filepath = os.path.join(root, filename)
-                    try:
-                        raag_name = os.path.basename(os.path.dirname(filepath))
+    for root, _, files in os.walk(root_path):
+        for filename in files:
+            if filename.endswith(".mp3.mp3"):
+                filepath = os.path.join(root, filename)
+                try:
+                    raag_name = os.path.basename(os.path.dirname(filepath))
 
-                        # Use 'filepath' (the full path) when loading data:
-                        tonic_hz = load_tonic(filepath) 
-                        pitch_data = load_pitch_data(filepath)
-                        sections = load_sections(filepath)
+                    # Use 'filepath' (the full path) when loading data:
+                    tonic_hz = load_tonic(filepath)
+                    pitch_data = load_pitch_data(filepath)
+                    sections = load_sections(filepath)
 
-                        processed_data = {
-                            'raag': raag_name,
-                            'tonic': tonic_hz,
-                            'notes': pitch_data,
-                            'sections': sections,
-                        }
-                        all_output.append(processed_data)
-                        raag_count += 1
+                    processed_data = {
+                        'raag': raag_name,
+                        'tonic': tonic_hz,
+                        'notes': pitch_data,
+                        'sections': sections,
+                    }
+                    all_output.append(processed_data)
+                    raag_count += 1
 
-                    except Exception as e:
-                        logging.error(f"Error processing file {filepath}: {e}")
-                        
+                except Exception as e:
+                    logging.error(f"Error processing file {filepath}: {e}")
+
     logging.info(f"Total raags processed: {raag_count}")
     print(f"Total raags processed: {raag_count}")  # Print total raags processed
     return all_output  # Return the accumulated preprocessed data
