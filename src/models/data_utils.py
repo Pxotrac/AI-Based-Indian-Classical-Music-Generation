@@ -153,7 +153,7 @@ def create_tokenizer(all_notes):
     return tokenizer
 
 
-def create_sequences(tokenizer, all_notes, sequence_length, batch_size):
+def create_sequences(tokenizer, all_notes, sequence_length, batch_size, raag_labels):
     """Transforms a list of notes into sequences suitable for training using tf.data.Dataset."""
     logging.info("Creating sequences...")
 
@@ -166,7 +166,13 @@ def create_sequences(tokenizer, all_notes, sequence_length, batch_size):
     dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
     dataset = dataset.map(lambda sequence: tokenize_sequence_tf(tokenizer, sequence))
 
-    # Batch the dataset
+    # Convert raag_labels to a TensorFlow tensor and create a dataset for it
+    raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
+    raag_labels_dataset = tf.data.Dataset.from_tensor_slices(raag_labels_tensor)
+    # Create a combined dataset with sequences and corresponding raag labels
+    dataset = tf.data.Dataset.zip((dataset, raag_labels_dataset))
+
+    # Batch the combined dataset
     dataset = dataset.batch(batch_size)
 
     # Prefetch for performance

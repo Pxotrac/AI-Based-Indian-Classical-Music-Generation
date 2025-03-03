@@ -69,9 +69,20 @@ def main():
     if vocab_size <= 1:
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
         return  # Stop execution if vocab size is too small
+    
+     # Raag ID mapping
+    logging.info("Creating raag ID mapping...")
+    raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
+    logging.info("Raag ID mapping complete")
+    logging.info(f"Number of raags: {num_raags}")
 
+    # Generate raag labels
+    logging.info("Generating raag labels...")
+    raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
+    logging.info("Raag labels generated")
+    
     # Create sequences using tf.data.Dataset
-    sequences_dataset = create_sequences(tokenizer, all_notes, sequence_length, batch_size * strategy.num_replicas_in_sync)
+    sequences_dataset = create_sequences(tokenizer, all_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
     
     # Split dataset into training and validation sets
@@ -88,17 +99,6 @@ def main():
     logging.info(f"Training dataset size: {train_size}")
     logging.info(f"Validation dataset size: {validation_size}")
 
-    # Raag ID mapping
-    logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
-    logging.info("Raag ID mapping complete")
-    logging.info(f"Number of raags: {num_raags}")
-
-    # Generate raag labels
-    logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
-    logging.info("Raag labels generated")
-
     end_time = time.time()  # End timer
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
@@ -108,36 +108,7 @@ def main():
 
         # Callbacks
         early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-        checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True)
-   
-        # Early stopping callback
-        early_stopping = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',  # Monitor validation loss
-            patience=5,          # Number of epochs with no improvement before stopping
-            restore_best_weights=True  # Restore the best model weights
-        )
-        # Train the model with early stopping and validation data
-        history = model.fit(
-            train_dataset,
-            epochs=50,  # Adjust as needed
-            validation_data=validation_dataset,  # Provide validation data
-            callbacks=[early_stopping]
-        )
-
-    # Plot training history
-    plt.plot(history.history['loss'], label='Training Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.show()
-    
-    # Save the model and tokenizer
-    model.save(f'{model_name}.h5')
-    with open(f'{tokenizer_name}.pickle', 'wb') as handle:
-        pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
+        checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True
     # Music Generation with random seed
     logging.info("Generating Music with random seed...")
     seed_sequence = generate_random_seed(tokenizer, sequence_length)
@@ -160,6 +131,3 @@ def main():
     midi_data_with_tonic = tokens_to_midi(generated_tokens_with_tonic, tokenizer)
     midi_data_with_tonic.write(f"generated_music_raag_{raag_id_value}_with_tonic.mid")
     logging.info("Music generated and saved")
-
-if __name__ == "__main__":
-    main()
