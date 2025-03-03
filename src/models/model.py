@@ -51,7 +51,7 @@ class TransformerBlock(tf.keras.layers.Layer):
         self.layernorm1 = LayerNormalization(epsilon=1e-6)
         self.layernorm2 = LayerNormalization(epsilon=1e-6)
 
-    def call(self, inputs):
+    def call(self, inputs, training):
         attn_output = self.attn(inputs, inputs, inputs)  # Self-attention
         out1 = self.layernorm1(inputs + attn_output)
         ffn_output = self.ffn(out1)

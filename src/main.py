@@ -53,14 +53,14 @@ def main():
     all_output = load_and_preprocess_data(dataset_path)
     logging.info("Data loaded.")
 
-    all_notes = extract_all_notes(all_output)
-    if not all_notes:
-        logging.warning("No notes were extracted during data preprocessing. Check data paths and formats.")
-        return
+    # Extract all notes
+    all_notes = extract_all_notes(all_output)  # Function to extract all notes from all_output
+    all_notes = [item for sublist in all_notes for item in sublist]
 
+    # Tokenization and vocabulary creation
     tokenizer = create_tokenizer(all_notes)
     if tokenizer is None:
-        logging.error("Tokenizer was not created, check pre processing. Aborting")
+        logging.error("Tokenizer was not created. Check preprocessing. Aborting")
         return
 
     vocab_size = len(tokenizer.word_index) + 1
@@ -73,16 +73,30 @@ def main():
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenizer, all_notes, sequence_length, batch_size * strategy.num_replicas_in_sync)
     logging.info("Data preprocessing complete.")
+    
+    # Split dataset into training and validation sets
+    # Calculate split indices
+    dataset_size = tf.data.experimental.cardinality(sequences_dataset).numpy()  # Get dataset size
+    validation_size = int(dataset_size * validation_split)  # Calculate validation size
+    train_size = dataset_size - validation_size  # Calculate training size
+
+    # Split the dataset
+    validation_dataset = sequences_dataset.take(validation_size)  # Take validation part
+    train_dataset = sequences_dataset.skip(validation_size)  # Skip validation and take rest
+
+    # Log dataset sizes
+    logging.info(f"Training dataset size: {train_size}")
+    logging.info(f"Validation dataset size: {validation_size}")
 
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(dataset_path)  # Assuming root_path is dataset_path
+    raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
 
     # Generate raag labels
     logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(dataset_path, all_notes, raag_id_dict, num_raags)  # Removed X argument, use all_notes
+    raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
     logging.info("Raag labels generated")
 
     end_time = time.time()  # End timer
@@ -96,19 +110,19 @@ def main():
         early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
         checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True)
    
-    # Early stopping callback
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss',  # Monitor validation loss
-        patience=5,          # Number of epochs with no improvement before stopping
-        restore_best_weights=True  # Restore the best model weights
-    )
-    # Train the model with early stopping and validation data
-    history = model.fit(
-        train_dataset,
-        epochs=50,  # Adjust as needed
-        validation_data=validation_dataset,  # Provide validation data
-        callbacks=[early_stopping]
-    )
+        # Early stopping callback
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',  # Monitor validation loss
+            patience=5,          # Number of epochs with no improvement before stopping
+            restore_best_weights=True  # Restore the best model weights
+        )
+        # Train the model with early stopping and validation data
+        history = model.fit(
+            train_dataset,
+            epochs=50,  # Adjust as needed
+            validation_data=validation_dataset,  # Provide validation data
+            callbacks=[early_stopping]
+        )
 
     # Plot training history
     plt.plot(history.history['loss'], label='Training Loss')
@@ -133,13 +147,18 @@ def main():
     raag_id_value = raag_id_dict.get('Basanti Kedar', 0)  
     if raag_id_value == 0 and 'Basanti Kedar' not in raag_id_dict:
         logging.warning("Raag 'Basanti Kedar' not found in raag ID dictionary. Using default ID 0.")
-
+    
+    vocab_size = len(tokenizer.word_index) + 1
+    sequence_length = config['sequence_length']
     generated_tokens = generate_music(
-        model, seed_sequence, raag_id_value, max_length=100, temperature=1.2, top_k=30, token_frequencies=token_frequencies, strategy=strategy  # Pass strategy
+        model, seed_sequence, raag_id_value, max_length=100, temperature=1.2, top_k=30, token_frequencies=token_frequencies, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length # Pass strategy
     )
 
     midi_data = tokens_to_midi(generated_tokens, tokenizer)
     midi_data.write(f"generated_music_raag_{raag_id_value}.mid")
+    generated_tokens_with_tonic = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
+    midi_data_with_tonic = tokens_to_midi(generated_tokens_with_tonic, tokenizer)
+    midi_data_with_tonic.write(f"generated_music_raag_{raag_id_value}_with_tonic.mid")
     logging.info("Music generated and saved")
 
 if __name__ == "__main__":

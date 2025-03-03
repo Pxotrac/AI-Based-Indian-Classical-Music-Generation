@@ -3,7 +3,7 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 
 try:
     # Load the tokenizer
-    with open("ragatokenzier.pkl", "rb") as f:
+    with open("my_tokenizer.pickle", "rb") as f:
         tokenizer = pickle.load(f)
         print("Tokenizer loaded successfully!")
         print("Vocabulary size:", len(tokenizer.word_index))  # Check the number of tokens

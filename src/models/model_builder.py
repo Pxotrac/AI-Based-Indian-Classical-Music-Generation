@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.keras import optimizers
 from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout, Input, concatenate
 from tensorflow.keras.models import Model
 
@@ -32,7 +33,7 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
     model = Model(inputs=[notes_input, raag_input], outputs=output_layer)
 
     # Compile the model
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)  # Adjust learning rate if needed
+    optimizer = optimizers.legacy.Adam(learning_rate=0.001)  # Adjust learning rate if needed
     # optimizer = tf.tpu.experimental.CrossShardOptimizer(optimizer) if strategy.num_replicas_in_sync > 1 else optimizer # Wrap optimizer if using TPU strategy
     
     model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])

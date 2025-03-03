@@ -109,6 +109,7 @@ def load_and_preprocess_data(root_path, max_raags=None):
                     pitch_data = load_pitch_data(filepath)
                     sections = load_sections(filepath)
 
+                    pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]
                     processed_data = {
                         'raag': raag_name,
                         'tonic': tonic_hz,
@@ -130,9 +131,12 @@ def extract_all_notes(all_output):
     """Extracts all notes from the preprocessed data."""
     logging.info("Extracting all notes...")
     all_notes = []
-    for artist_data in all_output:
-        for song_data in artist_data['songs']:
-            all_notes.extend(song_data['notes'])
+    for data_point in all_output:
+        notes = data_point.get('notes')
+        if notes is not None:
+            all_notes.append(notes)
+        else:
+            logging.warning("notes not found in data_point")
     logging.info(f"Extracted {len(all_notes)} notes")
     return all_notes
 
@@ -151,16 +155,13 @@ def create_sequences(tokenizer, all_notes, sequence_length, batch_size):
     logging.info("Creating sequences...")
 
     # Convert all_notes to a TensorFlow tensor
-    all_notes_tensor = tf.constant(all_notes)
+    all_notes_tensor = tf.constant(all_notes, dtype=tf.string)
 
     # Use tf.data.Dataset for sequence creation
     dataset = tf.data.Dataset.from_tensor_slices(all_notes_tensor)
     dataset = dataset.window(sequence_length + 1, shift=1, drop_remainder=True)  # Include target note
     dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
-    dataset = dataset.map(lambda sequence: (
-        [tokenizer.word_index.get(note.numpy().decode(), tokenizer.word_index['<unk>']) for note in sequence[:-1]],
-        tokenizer.word_index.get(sequence[-1].numpy().decode(), tokenizer.word_index['<unk>'])
-    ))
+    dataset = dataset.map(lambda sequence: tokenize_sequence_tf(tokenizer, sequence))
 
     # Batch the dataset
     dataset = dataset.batch(batch_size)
@@ -204,3 +205,15 @@ def generate_raag_labels(all_output, raag_id_dict, num_raags):
 
         logging.info("Raag labels generated.")
         return np.array(raag_labels, dtype='int32')
+    
+def tokenize_sequence(tokenizer, sequence):
+    notes = sequence[:-1]
+    target = sequence[-1]
+
+    tokenized_notes = [tokenizer.word_index.get(note.decode(), tokenizer.word_index['<unk>']) for note in notes.numpy().tolist()]
+    tokenized_target = tokenizer.word_index.get(target.decode(), tokenizer.word_index['<unk>'])
+    return tokenized_notes, tokenized_target
+
+def tokenize_sequence_tf(tokenizer, sequence):
+    tokenized_notes, tokenized_target = tf.py_function(lambda x: tokenize_sequence(tokenizer, x), [sequence], [tf.int32, tf.int32])
+    return tokenized_notes, tokenized_target

@@ -5,7 +5,7 @@ from collections import Counter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, top_k=40, token_frequencies=None, vocab_size=None, sequence_length=None):
+def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, top_k=40, token_frequencies=None, vocab_size=None, sequence_length=None, strategy=None):
     """Generates music using top-k sampling and token frequency balancing."""
     
     # Check if vocab_size and sequence_length are provided
@@ -19,7 +19,8 @@ def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, t
         raag_input = np.array([[raag_id]])
 
         # Predict the next note
-        prediction = model.predict([input_sequence, raag_input], verbose=0)
+        with strategy.scope():
+            prediction = model.predict([input_sequence, raag_input], verbose=0, training=False)
 
         # Apply temperature scaling
         prediction = prediction / temperature
@@ -77,8 +78,12 @@ def tokens_to_midi(generated_tokens, tokenizer, tonic_hz=440):
     midi.instruments.append(instrument)
     return midi
 
-def generate_raag_music(model, raag_id, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, tonic_hz=440):
+def generate_raag_music(model, raag_id, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, tonic_hz=440, strategy=None, vocab_size=None, sequence_length=None):
     """Generates music for a specific raag, potentially adjusting tonic frequency."""
+    # Check if vocab_size and sequence_length are provided
+    if vocab_size is None or sequence_length is None:
+        logging.error("vocab_size and sequence_length must be provided to generate_raag_music")
+        return []
 
     tonic_frequencies = {
         0: 349.23,  # Raag Bahar
@@ -168,17 +173,18 @@ def generate_raag_music(model, raag_id, seed_sequence, tokenizer, max_length=100
         84: 329.63,  # Yaman
     }
     tonic_hz = tonic_frequencies.get(raag_id, 440)  # Default to 440 if not found
-
-    generated_tokens = generate_music(model, seed_sequence, raag_id, max_length, temperature, top_k)
+    
+    generated_tokens = generate_music(model, seed_sequence, raag_id, max_length, temperature, top_k, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
     
     midi_data = tokens_to_midi(generated_tokens, tokenizer, tonic_hz=tonic_hz)  # Pass tonic_hz to tokens_to_midi
     midi_data.write(f"generated_music_raag_{raag_id}.mid")
 
     return generated_tokens
 
-def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_length, temperature=1.0, top_k=40, tonic_hz=440, vocab_size=None, sequence_length=None):
+def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_length, temperature=1.0, top_k=40, tonic_hz=440, vocab_size=None, sequence_length=None, strategy=None):
     """Generates music with raag-specific IDs and dynamic parameters."""
     logging.info("Generating music with raag-specific tonic...")
+    # Initialize generated_sequence here!
     generated_sequence = seed_sequence.copy()
 
     # Check if vocab_size and sequence_length are provided
@@ -199,9 +205,9 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
     for _ in range(max_length - len(seed_sequence)):
         input_sequence = np.array([generated_sequence[-sequence_length:]])  # Adjust if needed
         raag_input = np.array([[raag_id]])
-
         # Predict the next note
-        prediction = model.predict([input_sequence, raag_input], verbose=0)
+        with strategy.scope():
+            prediction = model.predict([input_sequence, raag_input], verbose=0, training=False)
 
         # Apply temperature scaling
         prediction = prediction / temperature
@@ -217,19 +223,20 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
         generated_sequence.append(next_token)
 
 
-# Convert generated sequence to MIDI
-midi = pretty_midi.PrettyMIDI(initial_tempo=120)
-instrument = pretty_midi.Instrument(program=0)
-current_time = 0
-for token in generated_sequence:
-    note_name = tokenizer.index_word.get(token)  # Get note name from token
-    if note_name in midi_mapping:  # Check if it's a valid note
-        midi_note = midi_mapping[note_name]
-        note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
-        instrument.notes.append(note)
-        current_time += 0.5
-midi.instruments.append(instrument)
-midi.write(f"generated_music_raag_{raag_id}_with_tonic.mid")
+    # Convert generated sequence to MIDI
+    midi = pretty_midi.PrettyMIDI(initial_tempo=120)
+    instrument = pretty_midi.Instrument(program=0)
+    current_time = 0
+    for token in generated_sequence:
+        note_name = tokenizer.index_word.get(token)  # Get note name from token
+        if note_name in midi_mapping:  # Check if it's a valid note
+            midi_note = midi_mapping[note_name]
+            note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
+            instrument.notes.append(note)
+            current_time += 0.5
+    midi.instruments.append(instrument)
+    midi.write(f"generated_music_raag_{raag_id}_with_tonic.mid")
+    return generated_sequence
 
 def generate_random_seed(tokenizer, sequence_length):
     """Generates a random seed sequence of specified length from the vocabulary of the tokenizer."""
