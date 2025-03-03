@@ -41,7 +41,7 @@ def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, t
 
         generated_sequence.append(next_token)
 
-    return generated_sequence
+    return generated_sequence # Return the generated sequence
 
 def tokens_to_midi(generated_tokens, tokenizer, tonic_hz=440):
     """Converts generated tokens to a MIDI file."""
