@@ -6,7 +6,7 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
 from models.model_builder import create_model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tqdm import tqdm  # Import tqdm for progress bars
@@ -54,7 +54,7 @@ def main():
 
     # Extract all notes
     all_notes = extract_all_notes(all_output)  # Function to extract all notes from all_output
-    all_notes = [item for sublist in all_notes for item in sublist]
+    all_notes_flatten = [item for sublist in all_notes for item in sublist]
 
     # Tokenization and vocabulary creation
     tokenizer = create_tokenizer(all_notes)
@@ -69,7 +69,7 @@ def main():
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
         return  # Stop execution if vocab size is too small
     
-     # Raag ID mapping
+    # Raag ID mapping
     logging.info("Creating raag ID mapping...")
     raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
     logging.info("Raag ID mapping complete")
@@ -80,56 +80,79 @@ def main():
     raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
     logging.info("Raag labels generated")
     
+    # Tokenize all notes
+    tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
+    
     # Create sequences using tf.data.Dataset
-    sequences_dataset = create_sequences(tokenizer, all_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
+    sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
     
-    # Split dataset into training and validation sets
-    # Calculate split indices
-    dataset_size = tf.data.experimental.cardinality(sequences_dataset).numpy()  # Get dataset size
-    validation_size = int(dataset_size * validation_split)  # Calculate validation size
-    train_size = dataset_size - validation_size  # Calculate training size
-
-    # Split the dataset
-    validation_dataset = sequences_dataset.take(validation_size)  # Take validation part
-    train_dataset = sequences_dataset.skip(validation_size)  # Skip validation and take rest
-
-    # Log dataset sizes
-    logging.info(f"Training dataset size: {train_size}")
-    logging.info(f"Validation dataset size: {validation_size}")
-
     end_time = time.time()  # End timer
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
-    # Model Creation and Training within strategy.scope()
+    # Split the dataset in train and validation
+    dataset_size = tf.data.experimental.cardinality(sequences_dataset).numpy()
+    train_size = int(dataset_size * (1 - validation_split))
+    train_dataset = sequences_dataset.take(train_size)
+    validation_dataset = sequences_dataset.skip(train_size)
+
+    # Model Creation, compilation and training within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
 
-        # Callbacks
+         # Model Checkpoint
+        checkpoint_filepath = os.path.join("checkpoints", f"{model_name}.h5")
+        model_checkpoint_callback = ModelCheckpoint(
+            filepath=checkpoint_filepath,
+            save_weights_only=True,
+            monitor='val_loss',
+            mode='min',
+            save_best_only=True)
+
+        # Early Stopping
         early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-        checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True)
-   
-        # Train the model with early stopping and validation data
+
+        # Training
+        logging.info("Starting model training...")
+        training_start_time = time.time()
         history = model.fit(
             train_dataset,
-            epochs=epochs,  # Adjust as needed
-            validation_data=validation_dataset,  # Provide validation data
-            callbacks=[early_stopping, checkpoint_callback]
+            validation_data=validation_dataset,
+            epochs=epochs,
+            callbacks=[early_stopping, model_checkpoint_callback],
+            verbose=1  # Set verbose=1 to see progress bars
         )
+        training_end_time = time.time()
+        logging.info(f"Model training took {training_end_time - training_start_time:.2f} seconds")
 
-    # Plot training history
-    plt.plot(history.history['loss'], label='Training Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.show()
-    
-    # Save the model and tokenizer
-    model.save(f'{model_name}.h5')
-    with open(f'{tokenizer_name}.pickle', 'wb') as handle:
-        pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
-   
+        # Save the model
+        model_path = os.path.join("models", f"{model_name}.h5")
+        model.save(model_path)
+        logging.info(f"Model saved to {model_path}")
+
+        # Save tokenizer
+        tokenizer_path = os.path.join("tokenizers", f"{tokenizer_name}.pickle")
+        with open(tokenizer_path, 'wb') as f:
+            pickle.dump(tokenizer, f)
+        logging.info(f"Tokenizer saved to {tokenizer_path}")
+
+        # Plot training history
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
+        plt.plot(history.history['accuracy'], label='Training Accuracy')
+        plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+        plt.legend()
+        plt.title('Training and Validation Accuracy')
+
+        plt.subplot(1, 2, 2)
+        plt.plot(history.history['loss'], label='Training Loss')
+        plt.plot(history.history['val_loss'], label='Validation Loss')
+        plt.legend()
+        plt.title('Training and Validation Loss')
+
+        plt.tight_layout()
+        plt.savefig(os.path.join("plots", f"{model_name}_training_history.png"))
+        logging.info("Training history plot saved.")
+
 if __name__ == "__main__":
     main()

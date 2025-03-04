@@ -58,8 +58,8 @@ def load_sections(filepath):
         return None
         
 def hz_to_svara(frequency_hz, tonic_hz):
-    """Converts frequency in Hz to a svara string."""
-    if not frequency_hz or frequency_hz == 0 or not tonic_hz or tonic_hz == 0 :
+    """Converts frequency in Hz to a svara string with octave."""
+    if not frequency_hz or frequency_hz == 0 or not tonic_hz or tonic_hz == 0:
         return None
     
     ratios = {
@@ -72,30 +72,29 @@ def hz_to_svara(frequency_hz, tonic_hz):
         "Ni": 15/8
     }
     
-    
     if frequency_hz is None:
-      return None
+        return None
     
+    # Calculate the base octave and the number of octaves above the tonic
+    octave = int(round(np.log2(frequency_hz / tonic_hz)))
     
-    svara_mapping = {}
-    for svara, ratio in ratios.items():
-        svara_freq = tonic_hz * ratio
-        svara_mapping[svara] = svara_freq
+    # Calculate the frequency in the same octave as the tonic
+    adjusted_frequency = frequency_hz / (2 ** octave)
     
     closest_svara = None
     min_diff = float('inf')
     
-    for svara, svara_freq in svara_mapping.items():
-      diff = abs(frequency_hz - svara_freq)
-      if diff < min_diff:
-          min_diff = diff
-          closest_svara = svara
-
+    for svara, ratio in ratios.items():
+        svara_freq = tonic_hz * ratio
+        diff = abs(adjusted_frequency - svara_freq)
+        if diff < min_diff:
+            min_diff = diff
+            closest_svara = svara
+            
     if closest_svara is not None:
-        return closest_svara
+        return f"{closest_svara}{octave}"
     else:
-      return None
-
+        return None
 def load_and_preprocess_data(root_path, max_raags=None):
     print(f"Loading data from: {root_path}")
     all_output = []
@@ -104,11 +103,12 @@ def load_and_preprocess_data(root_path, max_raags=None):
     for subdir, _, files in os.walk(root_path):
         if os.path.normpath(subdir).count(os.sep) - os.path.normpath(root_path).count(os.sep) >= 2:
             for file in files:
-                if file.endswith(".mp3") and not file.endswith(".mp3.md5"):
+                if file.endswith(".pitch.txt"): # change mp3 for pitch.txt
                     try:
                         filepath = os.path.join(subdir, file)
                         raag_name = os.path.basename(os.path.dirname(filepath))
-
+                        
+                        # load the data with the pitch filepath
                         tonic_hz = load_tonic(filepath)
                         pitch_data = load_pitch_data(filepath)
                         sections = load_sections(filepath)
@@ -136,7 +136,6 @@ def extract_all_notes(all_output):
     logging.info(f"Extracted {len(all_notes)} notes")
     return all_notes
 
-
 def create_tokenizer(all_notes):
     """Creates a Keras tokenizer for the notes."""
     logging.info("Creating tokenizer...")
@@ -145,15 +144,22 @@ def create_tokenizer(all_notes):
     logging.info("Tokenizer created.")
     return tokenizer
 
+def tokenize_all_notes(tokenizer, all_notes):
+    """Tokenizes a list of notes using the provided tokenizer."""
+    tokenized_notes = []
+    for note_list in all_notes:
+        tokens = [tokenizer.word_index.get(note, tokenizer.word_index['<unk>']) for note in note_list]
+        tokenized_notes.extend(tokens)
+    return tokenized_notes
 
-def create_sequences(tokenizer, all_notes, sequence_length, batch_size, raag_labels):
-    """Transforms a list of notes into sequences suitable for training using tf.data.Dataset."""
+def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
+    """Transforms a list of tokenized notes into sequences suitable for training using tf.data.Dataset."""
     logging.info("Creating sequences...")
-    all_notes_tensor = tf.constant(all_notes, dtype=tf.string)
+    all_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     dataset = tf.data.Dataset.from_tensor_slices(all_notes_tensor)
     dataset = dataset.window(sequence_length + 1, shift=1, drop_remainder=True)
     dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
-    dataset = dataset.map(lambda sequence: tokenize_sequence_tf(tokenizer, sequence))
+    dataset = dataset.map(lambda sequence: split_into_features_and_target(sequence))
 
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
     raag_labels_dataset = tf.data.Dataset.from_tensor_slices(raag_labels_tensor)
@@ -162,6 +168,10 @@ def create_sequences(tokenizer, all_notes, sequence_length, batch_size, raag_lab
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
     return dataset
+def split_into_features_and_target(sequence):
+    input_text = sequence[:-1]
+    target_text = sequence[1:]
+    return input_text, target_text
 
 
 def extract_raag_names(all_output):

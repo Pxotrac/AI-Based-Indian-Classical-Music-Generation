@@ -4,3 +4,5 @@ epochs: 100
 batch_size: 64
 validation_split: 0.2
 patience: 10
+model_name: "MusicTransformer"
+tokenizer_name: "transformer_tokenizer"

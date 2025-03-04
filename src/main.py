@@ -5,7 +5,7 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
 from models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
 from models.model_builder import create_model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
@@ -37,13 +37,9 @@ def main():
 
     dataset_path = config['dataset_path'] 
     sequence_length = config['sequence_length']
-    epochs = config['epochs']
-    batch_size = config['batch_size']
-    validation_split = config['validation_split']
-    patience = config['patience']
-    model_name = config.get('model_name', 'my_model')  # Get model_name from config, default to 'my_model'
-    tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
-
+    model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
+    tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
+    
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
     start_time = time.time()  # Start timer
@@ -54,7 +50,7 @@ def main():
 
     # Extract all notes
     all_notes = extract_all_notes(all_output)  # Function to extract all notes from all_output
-    all_notes = [item for sublist in all_notes for item in sublist]
+    all_notes_flatten = [item for sublist in all_notes for item in sublist]
 
     # Tokenization and vocabulary creation
     tokenizer = create_tokenizer(all_notes)
@@ -80,8 +76,10 @@ def main():
     raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
     logging.info("Raag labels generated")
     
+    # Tokenize all notes
+    tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
     # Create sequences using tf.data.Dataset
-    sequences_dataset = create_sequences(tokenizer, all_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
+    sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
     
     end_time = time.time()  # End timer
@@ -90,27 +88,17 @@ def main():
     # Model Creation and generation  within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
-         # Music Generation with random seed
+        # Music Generation with random seed
         logging.info("Generating Music with random seed...")
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
-        token_frequencies = get_token_frequencies(all_notes)
+        token_frequencies = get_token_frequencies(all_notes_flatten)
 
         # Get raag ID, handling potential KeyError
         raag_id_value = raag_id_dict.get('Basanti Kedar', 0)  
         if raag_id_value == 0 and 'Basanti Kedar' not in raag_id_dict:
             logging.warning("Raag 'Basanti Kedar' not found in raag ID dictionary. Using default ID 0.")
 
-        vocab_size = len(tokenizer.word_index) + 1
-        sequence_length = config['sequence_length']
-        generated_tokens = generate_music(
-            model, seed_sequence, raag_id_value, max_length=100, temperature=1.2, top_k=30, token_frequencies=token_frequencies, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length # Pass strategy
-        )
-
-        midi_data = tokens_to_midi(generated_tokens, tokenizer)
-        midi_data.write(f"generated_music_raag_{raag_id_value}.mid")
         generated_tokens_with_tonic = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
-        midi_data_with_tonic = tokens_to_midi(generated_tokens_with_tonic, tokenizer)
-        midi_data_with_tonic.write(f"generated_music_raag_{raag_id_value}_with_tonic.mid")
         logging.info("Music generated and saved")
 
 if __name__ == "__main__":
