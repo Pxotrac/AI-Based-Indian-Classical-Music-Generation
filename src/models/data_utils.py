@@ -180,20 +180,25 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     dataset = tf.data.Dataset.from_tensor_slices(all_notes_tensor)
     dataset = dataset.window(sequence_length + 1, shift=1, drop_remainder=True)
     dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
-    dataset = dataset.map(lambda sequence: split_into_features_and_target(sequence))
+    #dataset = dataset.map(lambda sequence: split_into_features_and_target(sequence))
 
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
     raag_labels_dataset = tf.data.Dataset.from_tensor_slices(raag_labels_tensor)
-    dataset = tf.data.Dataset.zip((dataset, raag_labels_dataset))
+    #dataset = tf.data.Dataset.zip((dataset, raag_labels_dataset)) #removed
+    dataset = dataset.map(lambda sequence: split_into_features_and_target_raag(sequence, raag_labels_dataset)) # changed
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
     return dataset
-def split_into_features_and_target(sequence):
-    input_text = sequence[:-1]
-    target_text = sequence[1:]
-    return input_text, target_text
 
+def split_into_features_and_target_raag(sequence, raag_dataset):
+  """Splits the sequence into features and target, also including raag labels."""
+  input_text = sequence[:-1]
+  target_text = sequence[1:]
+  # Get the raag label from the dataset
+  raag_label = raag_dataset.take(1).get_single_element()
+  # Return a tuple of (notes, raag), target
+  return (input_text, raag_label), target_text
 
 def extract_raag_names(all_output):
     """Extracts the raag names from the dataset directory."""

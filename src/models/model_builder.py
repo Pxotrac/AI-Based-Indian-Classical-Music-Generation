@@ -75,9 +75,10 @@ class MusicTransformer(tf.keras.Model):
         self.dense_layer = tf.keras.layers.Dense(num_notes)  
         self.raag_conditioning = RaagConditioning(sequence_length)  
 
-    def call(self, inputs, raag_id, training=False):  
+    def call(self, inputs, training=False):  #modified call method
+        notes_input, raag_id = inputs
         # Note Embedding
-        note_embeddings = self.embedding_layer(inputs)
+        note_embeddings = self.embedding_layer(notes_input)
 
         # Raag Embedding and Conditioning
         raag_embeddings = self.raag_embedding_layer(raag_id)  
@@ -93,6 +94,7 @@ class MusicTransformer(tf.keras.Model):
         # Output Layer
         output = self.dense_layer(x)
         return output
+
 def create_model(vocab_size, num_raags, sequence_length, strategy):
     """Creates a music generation model with raag conditioning."""
     embedding_dim = 256
@@ -109,5 +111,6 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
       optimizer = optimizers.legacy.Adam(learning_rate=0.001)  # Adjust learning rate if needed
       # optimizer = tf.tpu.experimental.CrossShardOptimizer(optimizer) if strategy.num_replicas_in_sync > 1 else optimizer # Wrap optimizer if using TPU strategy
       model.compile(loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), optimizer=optimizer, metrics=['accuracy'])
-    
+      #Now, model will call with a tuple, so we need to set it like that
+      model((notes_input, raag_input))
     return model

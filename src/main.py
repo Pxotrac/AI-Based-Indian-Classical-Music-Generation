@@ -6,7 +6,7 @@ import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
-from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies
+from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music, generate_music
 from models.model_builder import create_model
 from tqdm import tqdm  # Import tqdm for progress bars
 
@@ -110,7 +110,7 @@ def main():
         input_shape = (batch_size, sequence_length)
         dummy_notes_input = tf.zeros(input_shape, dtype=tf.int32)
         dummy_raag_input = tf.zeros((batch_size, 1), dtype=tf.int32)
-        model(dummy_notes_input, dummy_raag_input, training=False)
+        model((dummy_notes_input, dummy_raag_input), training=False)
         logging.info("Model built")
         model.load_weights(model_path)
         logging.info("Model load")
@@ -125,7 +125,10 @@ def main():
         if raag_id_value == 0 and raag_name not in raag_id_dict:
             logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Using default ID 0.")
 
-        generated_tokens_with_tonic = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
+        generated_sequence = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
+        # Generate Raag music.
+        generated_tokens_raag = generate_raag_music(model, raag_id_value, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
+
         logging.info("Music generated and saved")
 
 if __name__ == "__main__":
