@@ -153,15 +153,16 @@ def extract_all_notes(all_output):
         if notes is not None:
             all_notes.append(notes)
         else:
-            logging.warning("notes not found in data_point")
+            logging.warning("notes not found in data_point. Skipping notes...")
+            continue
     logging.info(f"Extracted {len(all_notes)} notes")
     return all_notes
 
-def create_tokenizer(all_notes):
+def create_tokenizer(all_notes_list):
     """Creates a Keras tokenizer for the notes."""
     logging.info("Creating tokenizer...")
     tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=False, oov_token="<unk>")
-    tokenizer.fit_on_texts(all_notes)
+    tokenizer.fit_on_texts(all_notes_list)
     logging.info("Tokenizer created.")
     return tokenizer
 
@@ -229,7 +230,7 @@ def generate_raag_labels(all_output, raag_id_dict, num_raags):
             if not data_point.get("notes"):
                 continue
             
-            notes_count = len(data_point['notes'])  # Get the number of notes in the data point
+            notes_count = len(data_point.get('notes')) # Get the number of notes in the data point
             raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
             all_raag_labels.extend([[label] for label in raag_labels])# modified
 

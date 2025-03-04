@@ -39,11 +39,14 @@ def main():
     # Check if running on Colab and set repo_dir accordingly
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
+        data_path = "/content/drive/MyDrive/"  #correct path
     else:
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(repo_dir)  # Go up one more level
-    
-    data_path = "/content/drive/MyDrive/"  #correct path
+        data_path = os.path.dirname(os.path.abspath(__file__))
+        data_path = os.path.dirname(data_path)
+        data_path = os.path.dirname(data_path)
+
     sequence_length = config['sequence_length']
     epochs = config['epochs']
     batch_size = config['batch_size']
@@ -63,13 +66,19 @@ def main():
     # Extract all notes
     all_notes = extract_all_notes(all_output)  # Function to extract all notes from all_output
     all_notes_flatten = [item for sublist in all_notes for item in sublist]
+    if len(all_notes_flatten) == 0:
+       logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
+       return
 
     # Tokenization and vocabulary creation
-    tokenizer = create_tokenizer(all_notes)
+    tokenizer = create_tokenizer(all_notes_flatten)
     if tokenizer is None:
         logging.error("Tokenizer was not created. Check preprocessing. Aborting")
         return
-
+    
+    if len(tokenizer.word_index) < 2:
+        logging.error("Tokenizer created a vocabulary with less than 2 words. Check your notes data. Aborting.")
+        return
     vocab_size = len(tokenizer.word_index) + 1
     logging.info(f"Vocab size: {vocab_size}")
 
