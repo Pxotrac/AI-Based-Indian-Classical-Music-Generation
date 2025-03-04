@@ -20,7 +20,7 @@ def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, t
 
         # Predict the next note
         with strategy.scope():
-            prediction = model.predict([input_sequence, raag_input], verbose=0, training=False)
+            prediction = model.predict([input_sequence, raag_input], verbose=0) # removed training=False
 
         # Apply temperature scaling
         prediction = prediction / temperature
@@ -207,7 +207,7 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
         raag_input = np.array([[raag_id]])
         # Predict the next note
         with strategy.scope():
-            prediction = model.predict([input_sequence, raag_input], verbose=0, training=False)
+            prediction = model.predict([input_sequence, raag_input], verbose=0) #removed training=False
 
         # Apply temperature scaling
         prediction = prediction / temperature
