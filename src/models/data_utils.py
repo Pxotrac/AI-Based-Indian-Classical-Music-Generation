@@ -9,7 +9,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def load_tonic(filepath):
     """Loads the tonic (Sa) frequency from the .ctonic.txt file."""
-    tonic_file = os.path.splitext(filepath)[0] + ".ctonic.txt"
+    directory = os.path.dirname(filepath) #added
+    file_name = os.path.basename(filepath).replace(".pitch.txt",".ctonic.txt") # added
+    tonic_file = os.path.join(directory,file_name) #added
     try:
         with open(tonic_file, 'r') as f:
             tonic_hz_str = f.readline().strip()
@@ -27,24 +29,26 @@ def load_tonic(filepath):
 
 def load_pitch_data(filepath):
     """Extracts pitch information from the .pitch.txt file."""
-    pitch_file = os.path.splitext(filepath)[0] + ".pitch.txt"
+    # Pitch file is the same filepath
     try:
-        with open(pitch_file, 'r') as f:
+        with open(filepath, 'r') as f:
             pitches = [float(line.strip()) for line in f]
             return pitches
     except FileNotFoundError:
-        logging.warning(f"Pitch file not found: {pitch_file}")
+        logging.warning(f"Pitch file not found: {filepath}")
         return None
     except ValueError:
-        logging.warning(f"Invalid pitch value in file: {pitch_file}")
+        logging.warning(f"Invalid pitch value in file: {filepath}")
         return None
     except Exception as e:
-        logging.error(f"Error loading file {pitch_file}: {e}")
+        logging.error(f"Error loading file {filepath}: {e}")
         return None
 
 def load_sections(filepath):
     """Loads section markers from the .sections-manual-p.txt file."""
-    sections_file = os.path.splitext(filepath)[0] + ".sections-manual-p.txt"
+    directory = os.path.dirname(filepath) #added
+    file_name = os.path.basename(filepath).replace(".pitch.txt",".sections-manual-p.txt") # added
+    sections_file = os.path.join(directory,file_name) #added
     try:
         with open(sections_file, 'r') as f:
             sections_str = f.readline().strip()
