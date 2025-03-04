@@ -31,13 +31,8 @@ else:
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
-    # Load Config
-    # Determine config file based on the environment
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-        config_file = "config_colab.yaml"
-    else:
-        config_file = "config.yaml"
-
+    # Load Config - Now always load config.yaml
+    config_file = "config.yaml"  # Always use config.yaml
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
     

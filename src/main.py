@@ -5,8 +5,8 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes, get_token_frequencies
-from models.music_utils import generate_music_with_tonic, generate_random_seed
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
+from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies
 from models.model_builder import create_model
 from tqdm import tqdm  # Import tqdm for progress bars
 
@@ -30,15 +30,12 @@ else:
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
-    # Load Config
-    # Determine config file based on the environment
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-        config_file = "config_colab.yaml"
-    else:
-        config_file = "config.yaml"
-    
+    # Load Config - Now always load config.yaml
+    config_file = "config.yaml" # Always use config.yaml
+
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
+
     # Check if running on Colab and set repo_dir accordingly
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
