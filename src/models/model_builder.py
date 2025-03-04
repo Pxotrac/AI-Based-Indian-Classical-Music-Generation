@@ -103,7 +103,7 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
     num_heads = 4
     num_layers = 2
     # Input layers
-    notes_input = Input(shape=(sequence_length,), name='notes_input')
+    notes_input = Input(shape=(None,), name='notes_input') # changed
     raag_input = Input(shape=(1,), name='raag_input')  # Input for raag ID #modified
     with strategy.scope():
       model = MusicTransformer(vocab_size, embedding_dim, num_heads, num_layers, sequence_length, num_raags)

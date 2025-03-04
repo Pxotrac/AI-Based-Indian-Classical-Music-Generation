@@ -131,10 +131,11 @@ def load_and_preprocess_data(root_path, data_path, max_raags=None): #change
                                 pitch_data = load_pitch_data(filepath)
                                 sections = load_sections(filepath)
                                 if pitch_data:
-                                    pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]
-                                processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
-                                all_output.append(processed_data)
-                                raag_count += 1
+                                    pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data if pitch !=0] # Only add not 0
+                                    if len(pitch_data) > 0:
+                                        processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
+                                        all_output.append(processed_data)
+                                        raag_count += 1
                             except Exception as e:
                                 logging.error(f"Error processing file {filepath}: {e}")
     if raag_count == 0:
