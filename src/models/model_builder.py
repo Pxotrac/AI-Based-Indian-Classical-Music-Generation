@@ -59,10 +59,8 @@ class RaagConditioning(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         self.sequence_length = sequence_length
         self.embedding_dim = embedding_dim
-        # self.dense = tf.keras.layers.Dense(self.embedding_dim) # Removed dense layer
 
-    def call(self, raag_embed):
-        raag_embed = tf.expand_dims(raag_embed, axis=1) # Add the new dimension
+    def call(self, raag_embed): #modified
         return tf.tile(raag_embed, [1, self.sequence_length, 1]) # Now we will repeat
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.sequence_length, input_shape[2])
