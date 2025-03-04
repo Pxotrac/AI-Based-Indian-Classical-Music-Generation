@@ -100,11 +100,15 @@ def load_and_preprocess_data(root_path, max_raags=None):
     print(f"Loading data from: {root_path}")
     all_output = []
     raag_count = 0
-    # Check if the extra 'hindustani' folder exists
+    
+    # Check if the extra 'hindustani' folder exists for Colab
     if os.path.exists(os.path.join(root_path, "hindustani", "hindustani")):
         dataset_folder = os.path.join(root_path, "hindustani", "hindustani") # For Colab folder structure
-    else:
+    elif os.path.exists(os.path.join(root_path, "hindustani")):
         dataset_folder = os.path.join(root_path, "hindustani") # For local folder structure
+    else:
+        logging.error(f"Dataset not found in path")
+        return
 
     for artist_folder in os.listdir(dataset_folder):
         artist_path = os.path.join(dataset_folder, artist_folder)
