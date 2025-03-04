@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, top_k=40, token_frequencies=None, vocab_size=None, sequence_length=None, strategy=None):
     """Generates music using top-k sampling and token frequency balancing."""
-    
+
     # Check if vocab_size and sequence_length are provided
     if vocab_size is None or sequence_length is None:
         logging.error("vocab_size and sequence_length must be provided to generate_music")
@@ -120,9 +120,9 @@ def generate_raag_music(model, raag_id, seed_sequence, tokenizer, max_length=100
         64: 261.63,  # Raag Yaman
     }
     tonic_hz = tonic_frequencies.get(raag_id, 440)  # Default to 440 if not found
-    
+
     generated_tokens = generate_music(model, seed_sequence, raag_id, max_length, temperature, top_k, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
-    
+
     midi_data = tokens_to_midi(generated_tokens, tokenizer, tonic_hz=tonic_hz)  # Pass tonic_hz to tokens_to_midi
     midi_data.write(f"generated_music_raag_{raag_id}.mid")
 
@@ -133,7 +133,7 @@ def tokens_to_midi(generated_tokens, tokenizer, tonic_hz=440):
     midi = pretty_midi.PrettyMIDI(initial_tempo=120)
     instrument = pretty_midi.Instrument(program=0)
     midi_mapping = {}
-    
+
     current_time = 0
     for token in generated_tokens:
         note_name = tokenizer.index_word.get(token)
@@ -141,7 +141,7 @@ def tokens_to_midi(generated_tokens, tokenizer, tonic_hz=440):
           if note_name not in midi_mapping:
               base_note = note_name[:-1]
               octave = int(note_name[-1])
-              
+
               if base_note == "Sa":
                   midi_note = 60
               elif base_note == "Re":
@@ -173,13 +173,14 @@ def tokens_to_midi(generated_tokens, tokenizer, tonic_hz=440):
 def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_length, temperature=1.0, top_k=40, tonic_hz=440, vocab_size=None, sequence_length=None, strategy=None):
     """Generates music with raag-specific IDs and dynamic parameters."""
     logging.info("Generating music with raag-specific tonic...")
+    # Initialize generated_sequence here!
     generated_sequence = seed_sequence.copy()
 
     # Check if vocab_size and sequence_length are provided
     if vocab_size is None or sequence_length is None:
         logging.error("vocab_size and sequence_length must be provided to generate_music_with_tonic")
         return []
-    
+
     midi_mapping = {}
     current_time = 0
     for _ in range(max_length - len(seed_sequence)):
@@ -206,14 +207,14 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
     # Convert generated sequence to MIDI
     midi = pretty_midi.PrettyMIDI(initial_tempo=120)
     instrument = pretty_midi.Instrument(program=0)
-    
+
     for token in generated_sequence:
         note_name = tokenizer.index_word.get(token)  # Get note name from token
         if note_name is not None:
           if note_name not in midi_mapping:
               base_note = note_name[:-1]
               octave = int(note_name[-1])
-              
+
               if base_note == "Sa":
                   midi_note = 60
               elif base_note == "Re":

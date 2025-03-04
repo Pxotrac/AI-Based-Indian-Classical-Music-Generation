@@ -34,8 +34,9 @@ def main():
     # Load Config
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
-
-    dataset_path = config['dataset_path'] 
+    repo_dir = "/content/drive/MyDrive/music_generation_repo"
+    dataset_path_local = config['dataset_path']
+    dataset_path = os.path.join(repo_dir, dataset_path_local)  # Get the dataset path inside the repo_dir
     sequence_length = config['sequence_length']
     epochs = config['epochs']
     batch_size = config['batch_size']
@@ -101,7 +102,7 @@ def main():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
 
          # Model Checkpoint
-        checkpoint_filepath = os.path.join("checkpoints", f"{model_name}.h5")
+        checkpoint_filepath = os.path.join(repo_dir, "checkpoints", f"{model_name}.h5")
         model_checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_filepath,
             save_weights_only=True,
@@ -126,12 +127,12 @@ def main():
         logging.info(f"Model training took {training_end_time - training_start_time:.2f} seconds")
 
         # Save the model
-        model_path = os.path.join("models", f"{model_name}.h5")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 
         # Save tokenizer
-        tokenizer_path = os.path.join("tokenizers", f"{tokenizer_name}.pickle")
+        tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
         with open(tokenizer_path, 'wb') as f:
             pickle.dump(tokenizer, f)
         logging.info(f"Tokenizer saved to {tokenizer_path}")
@@ -151,7 +152,7 @@ def main():
         plt.title('Training and Validation Loss')
 
         plt.tight_layout()
-        plt.savefig(os.path.join("plots", f"{model_name}_training_history.png"))
+        plt.savefig(os.path.join(repo_dir,"plots", f"{model_name}_training_history.png"))
         logging.info("Training history plot saved.")
 
 if __name__ == "__main__":

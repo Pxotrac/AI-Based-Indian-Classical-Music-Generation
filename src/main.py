@@ -35,10 +35,13 @@ def main():
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
-    dataset_path = config['dataset_path'] 
+    dataset_path_local = config['dataset_path'] # now is "dataset"
+    repo_dir = "/content/drive/MyDrive/music_generation_repo"
+    dataset_path = os.path.join(repo_dir, dataset_path_local)  # Get the dataset path inside the repo_dir
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
+    batch_size = config['batch_size'] # added
     
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -88,6 +91,10 @@ def main():
     # Model Creation and generation  within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
+        #load the model
+        model_path = os.path.join("models", f"{model_name}.h5")
+        model.load_weights(model_path)
+        logging.info("Model load")
         # Music Generation with random seed
         logging.info("Generating Music with random seed...")
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
