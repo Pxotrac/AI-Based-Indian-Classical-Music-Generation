@@ -43,6 +43,7 @@ def main():
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(repo_dir)  # Go up one more level
 
+    data_path = "/content/drive/MyDrive/"  #correct path
     dataset_path = os.path.join(repo_dir, config['dataset_path'])  # Get the dataset path inside the repo_dir
     sequence_length = config['sequence_length']
     epochs = config['epochs']
@@ -57,7 +58,7 @@ def main():
     start_time = time.time()  # Start timer
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(dataset_path)
+    all_output = load_and_preprocess_data(repo_dir, data_path) #change
     logging.info("Data loaded.")
 
     # Extract all notes

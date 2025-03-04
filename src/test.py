@@ -6,16 +6,31 @@ from models.data_utils import create_tokenizer, load_and_preprocess_data, extrac
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main():
+    """
+    Tests the tokenizer creation process.
+
+    This function attempts to create a tokenizer using the `create_tokenizer`
+    function from `data_utils.py`. It then checks if the tokenizer was
+    created successfully and prints the vocabulary size and the first
+    five words of the vocabulary.
+    """
     tokenizer_name = "transformer_tokenizer.pickle"  # Specify the file name
     # Check if running on Colab and set repo_dir accordingly
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
+        data_path = "/content/drive/MyDrive/"  #correct path
     else:
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(repo_dir)  # Go up one more level
-    dataset_path = os.path.join(repo_dir, "hindustani")
+        data_path = os.path.dirname(os.path.abspath(__file__))
+        data_path = os.path.dirname(data_path)
+        data_path = os.path.dirname(data_path)
+
     try:
-        all_output = load_and_preprocess_data(dataset_path)
+        all_output = load_and_preprocess_data(repo_dir, data_path) #change
+        if all_output is None or len(all_output) == 0:
+          logging.error("No data was found. Aborting")
+          return
         all_notes = extract_all_notes(all_output)
         tokenizer = create_tokenizer(all_notes)
         if tokenizer is None:
@@ -27,7 +42,7 @@ def main():
         logging.info(f"First 5 words in the vocabulary {list(tokenizer.word_index.items())[:5]}")
 
     except Exception as e:
-        logging.error(f"Error loading tokenizer: {e}")
+        logging.error(f"Error creating the tokenizer: {e}")
 
 if __name__ == "__main__":
     main()
