@@ -104,11 +104,11 @@ def load_and_preprocess_data(root_path, data_path, max_raags=None): #change
     raag_count = 0
     
     # Check if the 'hindustani' folder exists
-    if os.path.exists(os.path.join(data_path, "hindustani")): #change
-        dataset_folder = os.path.join(data_path, "hindustani") #change
+    if os.path.exists(os.path.join(data_path, "hindustani","hindustani")): #change
+        dataset_folder = os.path.join(data_path, "hindustani","hindustani") #change
         logging.info(f"Dataset folder found: {dataset_folder}")
     else:
-        logging.error(f"Dataset not found in path: {os.path.join(data_path, 'hindustani')}") #change
+        logging.error(f"Dataset not found in path: {os.path.join(data_path, 'hindustani','hindustani')}") #change
         return []
 
     for artist_folder in os.listdir(dataset_folder):
