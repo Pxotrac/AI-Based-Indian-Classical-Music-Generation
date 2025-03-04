@@ -96,29 +96,34 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
         return None
 
-def load_and_preprocess_data(root_path, max_raags=None):
+def load_and_preprocess_data(root_path, data_path, max_raags=None): #change
     """Loads and preprocesses data from the dataset directory."""
-    print(f"Loading data from: {root_path}")
+    print(f"Loading data from: {data_path}") #change
+    logging.info(f"Loading data from: {data_path}") #change
     all_output = []
     raag_count = 0
     
     # Check if the 'hindustani' folder exists
-    if os.path.exists(os.path.join(root_path, "hindustani")):
-        dataset_folder = os.path.join(root_path, "hindustani")
+    if os.path.exists(os.path.join(data_path, "hindustani")): #change
+        dataset_folder = os.path.join(data_path, "hindustani") #change
+        logging.info(f"Dataset folder found: {dataset_folder}")
     else:
-        logging.error(f"Dataset not found in path: {os.path.join(root_path, 'hindustani')}")
+        logging.error(f"Dataset not found in path: {os.path.join(data_path, 'hindustani')}") #change
         return []
 
     for artist_folder in os.listdir(dataset_folder):
         artist_path = os.path.join(dataset_folder, artist_folder)
+        logging.info(f"Processing artist folder: {artist_path}")  # New logging
         if os.path.isdir(artist_path):
             for raag_folder in os.listdir(artist_path):
                 raag_path = os.path.join(artist_path, raag_folder)
+                logging.info(f"  Processing raag folder: {raag_path}")  # New logging
                 if os.path.isdir(raag_path):
                     for file in os.listdir(raag_path):
                         if file.endswith(".pitch.txt"):
                             try:
                                 filepath = os.path.join(raag_path, file)
+                                logging.info(f"    Processing file: {filepath}")  # New logging
                                 raag_name = os.path.basename(raag_path)
                                 
                                 # load the data with the pitch filepath

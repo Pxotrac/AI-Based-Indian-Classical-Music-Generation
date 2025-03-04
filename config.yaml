@@ -1,4 +1,4 @@
-dataset_path: "hindustani"
+dataset_path: "hindustani/hindustani"
 sequence_length: 50
 epochs: 100
 batch_size: 64

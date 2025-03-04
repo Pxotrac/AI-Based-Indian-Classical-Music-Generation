@@ -42,8 +42,10 @@ def main():
     else:
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(repo_dir)  # Go up one more level
+    
+    data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive
+    dataset_path = os.path.join(repo_dir, config['dataset_path']) # removed
 
-    dataset_path = os.path.join(repo_dir, config['dataset_path'])
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
@@ -54,7 +56,7 @@ def main():
     start_time = time.time()  # Start timer
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(dataset_path)
+    all_output = load_and_preprocess_data(repo_dir, data_path) #change
     logging.info("Data loaded.")
 
     # Extract all notes
