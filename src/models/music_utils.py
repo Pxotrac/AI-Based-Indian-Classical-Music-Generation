@@ -2,7 +2,6 @@ import numpy as np
 import pretty_midi
 import logging
 from collections import Counter
-from models.data_utils import tokenize_all_notes  # added line
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -21,7 +20,7 @@ def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, t
 
         # Predict the next note
         with strategy.scope():
-            prediction = model.predict([input_sequence, raag_input], verbose=0) # removed training=False
+            prediction = model.predict([input_sequence, raag_input], verbose=0)  # removed training=False
 
         # Apply temperature scaling
         prediction = prediction / temperature
@@ -43,7 +42,7 @@ def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, t
 
         generated_sequence.append(next_token)
 
-    return generated_sequence # Return the generated sequence
+    return generated_sequence  # Return the generated sequence
 
 def generate_raag_music(model, raag_id, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, tonic_hz=440, strategy=None, vocab_size=None, sequence_length=None):
     """Generates music for a specific raag, potentially adjusting tonic frequency."""
@@ -138,34 +137,34 @@ def tokens_to_midi(generated_tokens, tokenizer, tonic_hz=440):
     for token in generated_tokens:
         note_name = tokenizer.index_word.get(token)
         if note_name is not None:
-          if note_name not in midi_mapping:
-              base_note = note_name[:-1]
-              octave = int(note_name[-1])
+            if note_name not in midi_mapping:
+                base_note = note_name[:-1]
+                octave = int(note_name[-1])
 
-              if base_note == "Sa":
-                  midi_note = 60
-              elif base_note == "Re":
-                  midi_note = 62
-              elif base_note == "Ga":
-                  midi_note = 64
-              elif base_note == "Ma":
-                  midi_note = 65
-              elif base_note == "Pa":
-                  midi_note = 67
-              elif base_note == "Dha":
-                  midi_note = 69
-              elif base_note == "Ni":
-                  midi_note = 71
-              else:
-                  continue
-              midi_note = midi_note + (octave * 12)
-              midi_mapping[note_name] = midi_note
-          else:
-             midi_note = midi_mapping[note_name]
+                if base_note == "Sa":
+                    midi_note = 60
+                elif base_note == "Re":
+                    midi_note = 62
+                elif base_note == "Ga":
+                    midi_note = 64
+                elif base_note == "Ma":
+                    midi_note = 65
+                elif base_note == "Pa":
+                    midi_note = 67
+                elif base_note == "Dha":
+                    midi_note = 69
+                elif base_note == "Ni":
+                    midi_note = 71
+                else:
+                    continue
+                midi_note = midi_note + (octave * 12)
+                midi_mapping[note_name] = midi_note
+            else:
+                midi_note = midi_mapping[note_name]
 
-          note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
-          instrument.notes.append(note)
-          current_time += 0.5
+            note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
+            instrument.notes.append(note)
+            current_time += 0.5
 
     midi.instruments.append(instrument)
     return midi
@@ -188,7 +187,7 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
         raag_input = np.array([[raag_id]])
         # Predict the next note
         with strategy.scope():
-            prediction = model.predict([input_sequence, raag_input], verbose=0) #removed training=False
+            prediction = model.predict([input_sequence, raag_input], verbose=0)  # removed training=False
 
         # Apply temperature scaling
         prediction = prediction / temperature
@@ -200,9 +199,8 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
         probabilities = probabilities / np.sum(probabilities)  # Normalize probabilities
 
         # Sample from top-k tokens
-        next_token = np.random.choice(indices, p=probabilities)  
+        next_token = np.random.choice(indices, p=probabilities)
         generated_sequence.append(next_token)
-
 
     # Convert generated sequence to MIDI
     midi = pretty_midi.PrettyMIDI(initial_tempo=120)
@@ -211,34 +209,34 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
     for token in generated_sequence:
         note_name = tokenizer.index_word.get(token)  # Get note name from token
         if note_name is not None:
-          if note_name not in midi_mapping:
-              base_note = note_name[:-1]
-              octave = int(note_name[-1])
+            if note_name not in midi_mapping:
+                base_note = note_name[:-1]
+                octave = int(note_name[-1])
 
-              if base_note == "Sa":
-                  midi_note = 60
-              elif base_note == "Re":
-                  midi_note = 62
-              elif base_note == "Ga":
-                  midi_note = 64
-              elif base_note == "Ma":
-                  midi_note = 65
-              elif base_note == "Pa":
-                  midi_note = 67
-              elif base_note == "Dha":
-                  midi_note = 69
-              elif base_note == "Ni":
-                  midi_note = 71
-              else:
-                  continue
-              midi_note = midi_note + (octave * 12)
-              midi_mapping[note_name] = midi_note
-          else:
-             midi_note = midi_mapping[note_name]
+                if base_note == "Sa":
+                    midi_note = 60
+                elif base_note == "Re":
+                    midi_note = 62
+                elif base_note == "Ga":
+                    midi_note = 64
+                elif base_note == "Ma":
+                    midi_note = 65
+                elif base_note == "Pa":
+                    midi_note = 67
+                elif base_note == "Dha":
+                    midi_note = 69
+                elif base_note == "Ni":
+                    midi_note = 71
+                else:
+                    continue
+                midi_note = midi_note + (octave * 12)
+                midi_mapping[note_name] = midi_note
+            else:
+                midi_note = midi_mapping[note_name]
 
-          note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
-          instrument.notes.append(note)
-          current_time += 0.5
+            note = pretty_midi.Note(velocity=100, pitch=midi_note, start=current_time, end=current_time + 0.5)
+            instrument.notes.append(note)
+            current_time += 0.5
     midi.instruments.append(instrument)
     midi.write(f"generated_music_raag_{raag_id}_with_tonic.mid")
     return generated_sequence

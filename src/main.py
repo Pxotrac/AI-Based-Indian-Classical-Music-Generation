@@ -37,14 +37,16 @@ def main():
         config = yaml.safe_load(f)
 
  # Data paths
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-        data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive
-    else:
-        data_path = os.path.dirname(os.path.abspath(__file__))
-        data_path = os.path.dirname(data_path)
-        data_path = os.path.dirname(data_path)
-        
-    #data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive (this is unnecesary)
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE": #added
+         data_path = "/content/drive/MyDrive/" #added
+         repo_dir = "/content/drive/MyDrive/music_generation_repo" #added
+         print(f"Running on Colab. repo_dir: {repo_dir}") #added
+         print(f"Running on Colab. data_path: {data_path}") #added
+    else: #added
+         repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) #added
+         data_path = os.path.dirname(repo_dir) #added
+         print(f"Running locally. repo_dir: {repo_dir}") #added
+         print(f"Running locally. data_path: {data_path}") #added
     repo_dir = os.path.dirname(os.path.abspath(__file__))
     repo_dir = os.path.dirname(repo_dir)  # Go up one more level
     sequence_length = config['sequence_length']
@@ -81,7 +83,7 @@ def main():
 
     vocab_size = len(tokenizer.word_index) + 1
     logging.info(f"Vocab size: {vocab_size}")
-
+    print(f"Tokenizer vocabulary: {tokenizer.word_index}")
     if vocab_size <= 1:
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
         return  # Stop execution if vocab size is too small
@@ -91,6 +93,7 @@ def main():
     raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
+    print(f"Raag ID dict: {raag_id_dict}")
 
     if num_raags == 0:
       logging.error("No raags were found. Please check your data.")

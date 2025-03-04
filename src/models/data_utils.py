@@ -104,11 +104,11 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
     raag_count = 0
     
     # Check if the 'hindustani' folder exists
-    if os.path.exists(os.path.join(data_path, "hindustani","hindustani")): #change
-        dataset_folder = os.path.join(data_path, "hindustani","hindustani") #change
+    if os.path.exists(os.path.join(data_path, "hindustani")): #change
+        dataset_folder = os.path.join(data_path, "hindustani") #change
         logging.info(f"Dataset folder found: {dataset_folder}")
     else:
-        logging.error(f"Dataset not found in path: {os.path.join(data_path, 'hindustani','hindustani')}") #change
+        logging.error(f"Dataset not found in path: {os.path.join(data_path, 'hindustani')}") #change
         return []
 
     for artist_folder in os.listdir(dataset_folder):
@@ -151,101 +151,107 @@ def extract_all_notes(all_output):
     all_notes = []
     for data_point in all_output:
         notes = data_point.get('notes')
-        if notes is not None:
-            all_notes.append(notes)
-        else:
-            logging.warning("notes not found in data_point. Skipping notes...")
+        if notes is None:
+            logging.warning(f"No notes found for {data_point.get('raag')}. Skipping.")
             continue
-    logging.info(f"Extracted {len(all_notes)} notes")
+        all_notes.append(notes)
+    logging.info(f"Total number of notes found: {len(all_notes)}")
     return all_notes
 
-def create_tokenizer(all_notes_list):
-    """Creates a Keras tokenizer for the notes."""
-    logging.info("Creating tokenizer...")
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=False, oov_token="<unk>")
-    tokenizer.fit_on_texts(all_notes_list)
-    logging.info("Tokenizer created.")
+def create_tokenizer(all_notes):
+    """Creates a tokenizer based on the unique notes."""
+    if not all_notes or len(all_notes) == 0:
+        logging.error("No notes provided to create a tokenizer. Aborting.")
+        return None
+    
+    # Flatten the list of lists
+    all_notes_flatten = [item for sublist in all_notes for item in sublist]
+
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(filters='', lower=False, oov_token="<unk>")  # Removed filters and set lower=False
+    tokenizer.fit_on_texts(all_notes_flatten)
     return tokenizer
 
 def tokenize_all_notes(tokenizer, all_notes):
-    """Tokenizes a list of notes using the provided tokenizer."""
-    tokenized_notes = []
-    for note_list in all_notes:
-        tokens = [tokenizer.word_index.get(note, tokenizer.word_index['<unk>']) for note in note_list]
-        tokenized_notes.extend(tokens)
+    """Tokenizes all notes using the provided tokenizer."""
+    logging.info("Tokenizing all notes...")
+    tokenized_notes = tokenizer.texts_to_sequences(all_notes)
     return tokenized_notes
 
+def tokenize_sequence(tokenizer, sequence):
+    """Tokenizes a sequence of notes using the provided tokenizer."""
+    tokenized_sequence = tokenizer.texts_to_sequences([sequence])  # Pass as a list of strings
+    return tokenized_sequence[0]  # Return the first (and only) list of tokenized sequences
+
 def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
-    """Transforms a list of tokenized notes into sequences suitable for training using tf.data.Dataset."""
+    """Creates sequences from tokenized notes, batching and adding raag labels."""
     logging.info("Creating sequences...")
-    all_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
-    dataset = tf.data.Dataset.from_tensor_slices(all_notes_tensor)
-    dataset = dataset.window(sequence_length + 1, shift=1, drop_remainder=True)
-    dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
-    #dataset = dataset.map(lambda sequence: split_into_features_and_target(sequence))
+    sequences_with_labels = []
+    for i, seq in enumerate(tokenized_notes):
+        if len(seq) < sequence_length + 1:  # Add +1 to account for the target note
+          continue
+        for j in range(0, len(seq) - sequence_length):
+            input_sequence = seq[j:j+sequence_length]
+            # Check if raag_labels has enough labels
+            if len(raag_labels) > i and len(raag_labels[i]) > 0:
+              target_raag_id = raag_labels[i][0]  # Get raag_id from raag_labels
+              sequences_with_labels.append((input_sequence, target_raag_id, seq[j+sequence_length]))
+            else:
+              logging.warning(f"Not enough labels for sequence {i}. Skipping.")
 
-    raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
-    raag_labels_dataset = tf.data.Dataset.from_tensor_slices(raag_labels_tensor)
-    #dataset = tf.data.Dataset.zip((dataset, raag_labels_dataset)) #removed
-    dataset = dataset.map(lambda sequence: split_into_features_and_target_raag(sequence, raag_labels_dataset)) # changed
-    dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    # Shuffle and batch the data
+    np.random.shuffle(sequences_with_labels)
+    features, raag_ids, targets = zip(*sequences_with_labels) #modified
+    features_padded = tf.keras.preprocessing.sequence.pad_sequences(features)  # Pad the sequences
+    # Convert to tensors
+    features_tensor = tf.convert_to_tensor(features_padded, dtype=tf.int32)
+    targets_tensor = tf.convert_to_tensor(targets, dtype=tf.int32)
+    raag_ids_tensor = tf.convert_to_tensor(raag_ids, dtype=tf.int32)
+    
+    dataset = tf.data.Dataset.from_tensor_slices(((features_tensor, raag_ids_tensor), targets_tensor)) #modified
+    dataset = dataset.batch(batch_size) #modified
 
+    logging.info(f"Total number of sequences created: {len(sequences_with_labels)}")
     return dataset
 
-def split_into_features_and_target_raag(sequence, raag_dataset):
-  """Splits the sequence into features and target, also including raag labels."""
-  input_text = sequence[:-1]
-  target_text = sequence[1:]
-  # Get the raag label from the dataset
-  raag_label = raag_dataset.take(1).get_single_element()
-  # Return a tuple of (notes, raag), target
-  return (input_text, raag_label), target_text
+def split_into_features_and_target_raag(sequence, raag_id): #modified
+    """Splits a sequence into features and target, and returns the raag ID."""
+    input_sequence = sequence[:-1]  # All but the last element
+    target = sequence[-1]  # Last element is the target
+    return input_sequence, target, raag_id  # Return the input sequence, target, and raag ID
 
 def extract_raag_names(all_output):
-    """Extracts the raag names from the dataset directory."""
-    raag_names = set()  # Use a set for uniqueness
+    """Extracts unique raag names from the dataset."""
+    raag_names = set()
     for data_point in all_output:
-      raag_names.add(data_point['raag'])
-    return list(raag_names)  # Convert the set back to a list
+        raag_names.add(data_point['raag'])
+    return list(raag_names)
 
 def create_raag_id_mapping(all_output):
-        """Creates a mapping from raag names to unique integer IDs."""
-        raag_names = list({d['raag'] for d in all_output})  # Get unique raag names
-        raag_id_dict = {raag: i for i, raag in enumerate(raag_names)}
-        return raag_id_dict, len(raag_id_dict)
+    """Creates a mapping from raag names to unique IDs."""
+    logging.info("Creating raag ID mapping...")
+    raag_names = extract_raag_names(all_output)
+    raag_id_dict = {raag_name: i for i, raag_name in enumerate(raag_names)}
+    logging.info(f"Raag ID mapping created: {raag_id_dict}")
+    logging.info(f"Total unique raags found: {len(raag_id_dict)}")
+    return raag_id_dict, len(raag_id_dict)
 
-def generate_raag_labels(all_output, raag_id_dict, num_raags):
-        """Generates raag labels for each data point in all_output."""
-        logging.info("Generating raag labels")
-        all_raag_labels = []  # To collect raag labels for all notes
-
-        for data_point in all_output:
-            raag_name = data_point['raag']  # Corrected: Access 'raag' directly
-            
-            # Correctly look up the raag_id
-            raag_id = raag_id_dict.get(raag_name)
-            if raag_id is None:
-                logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
-                continue  # Skip this data point if the raag_id is not found
-            if not data_point.get("notes"):
-                continue
-            
-            notes_count = len(data_point.get('notes')) # Get the number of notes in the data point
-            raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
-            all_raag_labels.extend([[label] for label in raag_labels])# modified
-
-        logging.info("Raag labels generated")
-        return np.array(all_raag_labels, dtype='int32')
+def generate_raag_labels(all_output, raag_id_dict, num_raags): #added
+    """Generates raag labels for each sequence based on the raag ID mapping."""
+    logging.info("Generating raag labels...")
+    all_raag_labels = []
     
-def tokenize_sequence(tokenizer, sequence):
-    notes = sequence[:-1]
-    target = sequence[-1]
+    for data_point in all_output:
+        raag_name = data_point['raag']  # Corrected: Access 'raag' directly
+        
+        # Correctly look up the raag_id
+        raag_id = raag_id_dict.get(raag_name)
+        if raag_id is None:
+            logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
+            continue
 
-    tokenized_notes = [tokenizer.word_index.get(note.decode(), tokenizer.word_index['<unk>']) for note in notes.numpy().tolist()]
-    tokenized_target = tokenizer.word_index.get(target.decode(), tokenizer.word_index['<unk>'])
-    return tokenized_notes, tokenized_target
+        notes_count = len(data_point.get('notes')) # Get the number of notes in the data point
+        raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
+        all_raag_labels.extend([[label] for label in raag_labels])# modified
 
-def tokenize_sequence_tf(tokenizer, sequence):
-    tokenized_notes, tokenized_target = tf.py_function(lambda x: tokenize_sequence(tokenizer, x), [sequence], [tf.int32, tf.int32])
-    return tokenized_notes, tokenized_target
+    logging.info(f"Total raag labels generated: {len(all_raag_labels)}")
+    return all_raag_labels
