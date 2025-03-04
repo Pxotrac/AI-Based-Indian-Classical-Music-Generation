@@ -107,7 +107,7 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
         return None
 
-def load_and_preprocess_data(repo_dir, data_path, max_raags=None, min_notes=100): #modified add min_notes
+def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #modified removed min notes
     """Loads and preprocesses data from the dataset directory."""
     print(f"Loading data from: {data_path}") #change
     logging.info(f"Loading data from: {data_path}") #change
@@ -145,12 +145,10 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None, min_notes=100)
                                     sections = load_sections(filepath)
                                     if pitch_data:
                                         pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data if pitch !=0] # Only add not 0
-                                        if len(pitch_data) > min_notes: #added check length
+                                        if len(pitch_data) > 0:
                                             processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
                                             all_output.append(processed_data)
                                             raag_count += 1
-                                        else: #added
-                                          logging.warning(f"Skipping raag {raag_name} because it has less than {min_notes} notes.")#added
                                 else:
                                     logging.warning(f"Pitch file not found: {filepath}")
                             except Exception as e:
@@ -162,18 +160,24 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None, min_notes=100)
     print(f"Total raags processed: {raag_count}")
     return all_output
 
-def extract_all_notes(all_output):
+def extract_all_notes(all_output, min_notes=100):
     """Extracts all notes from the preprocessed data."""
     logging.info("Extracting all notes...")
     all_notes = []
+    all_output_filtered = [] #added array
     for data_point in all_output:
         notes = data_point.get('notes')
         if notes is None:
             logging.warning(f"No notes found for {data_point.get('raag')}. Skipping.")
             continue
-        all_notes.extend(notes) #modified
+        if len(notes) > min_notes: # added filter
+            all_notes.extend(notes) #modified
+            all_output_filtered.append(data_point) # added save data point
+        else: #added if less than min_notes
+            logging.warning(f"Skipping raag {data_point.get('raag')} because it has less than {min_notes} notes.")#added
+            continue # added
     logging.info(f"Total number of notes found: {len(all_notes)}")
-    return all_notes
+    return all_notes, all_output_filtered # changed
 
 def create_tokenizer(all_notes):
     """Creates a tokenizer based on the unique notes."""
