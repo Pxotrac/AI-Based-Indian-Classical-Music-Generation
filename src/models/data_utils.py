@@ -96,7 +96,7 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
         return None
 
-def load_and_preprocess_data(root_path, data_path, max_raags=None): #change
+def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
     """Loads and preprocesses data from the dataset directory."""
     print(f"Loading data from: {data_path}") #change
     logging.info(f"Loading data from: {data_path}") #change

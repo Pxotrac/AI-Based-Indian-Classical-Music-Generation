@@ -36,16 +36,15 @@ def main():
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
     
-    # Check if running on Colab and set repo_dir accordingly
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-        repo_dir = "/content/drive/MyDrive/music_generation_repo"
-        data_path = "/content/drive/MyDrive/"  #correct path
-    else:
-        repo_dir = os.path.dirname(os.path.abspath(__file__))
-        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
-        data_path = os.path.dirname(os.path.abspath(__file__))
-        data_path = os.path.dirname(data_path)
-        data_path = os.path.dirname(data_path)
+if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+    repo_dir = "/content/drive/MyDrive/music_generation_repo"
+    data_path = "/content/drive/MyDrive/"  #correct path
+else:
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(repo_dir)  # Go up one more level
+    data_path = os.path.dirname(os.path.abspath(__file__)) #
+    data_path = os.path.dirname(data_path)
+    data_path = os.path.dirname(data_path)
 
     sequence_length = config['sequence_length']
     epochs = config['epochs']
