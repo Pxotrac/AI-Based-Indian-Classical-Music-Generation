@@ -30,15 +30,19 @@ def load_tonic(filepath):
 def load_pitch_data(filepath):
     """Extracts pitch information from the .pitch.txt file."""
     # Pitch file is the same filepath
+    pitches = [] # modified
     try:
         with open(filepath, 'r') as f:
-            pitches = [float(line.strip()) for line in f]
+            for line in f: # modified
+                try:
+                    pitch = float(line.strip()) # modified
+                    pitches.append(pitch) # modified
+                except ValueError:
+                    logging.warning(f"Invalid pitch value found in file: {filepath}. Skipping this line.") #added
+                    continue #added
             return pitches
     except FileNotFoundError:
         logging.warning(f"Pitch file not found: {filepath}")
-        return None
-    except ValueError:
-        logging.warning(f"Invalid pitch value in file: {filepath}")
         return None
     except Exception as e:
         logging.error(f"Error loading file {filepath}: {e}")
