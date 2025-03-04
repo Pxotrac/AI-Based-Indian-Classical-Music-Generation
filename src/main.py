@@ -34,6 +34,12 @@ def main():
     # Load Config
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
+    # Check if running on Colab and set repo_dir accordingly
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+        repo_dir = "/content/drive/MyDrive/music_generation_repo"
+    else:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
 
     dataset_path = config['dataset_path'] 
     sequence_length = config['sequence_length']
@@ -93,7 +99,7 @@ def main():
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         #load the model
-        model_path = os.path.join("models", f"{model_name}.h5")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
         # First, build the model by calling it with some dummy inputs
         input_shape = (batch_size, sequence_length)
         dummy_notes_input = tf.zeros(input_shape, dtype=tf.int32)
