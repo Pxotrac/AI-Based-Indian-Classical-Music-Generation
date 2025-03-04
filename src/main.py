@@ -37,14 +37,16 @@ def main():
         config = yaml.safe_load(f)
 
  # Data paths
-if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-    data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive
-else:
-     data_path = os.path.dirname(os.path.abspath(__file__))
-     data_path = os.path.dirname(data_path)
-     data_path = os.path.dirname(data_path)
-    
-    data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+        data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive
+    else:
+        data_path = os.path.dirname(os.path.abspath(__file__))
+        data_path = os.path.dirname(data_path)
+        data_path = os.path.dirname(data_path)
+        
+    #data_path = "/content/drive/MyDrive/"  #correct path, hindustani is in MyDrive (this is unnecesary)
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(repo_dir)  # Go up one more level
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
@@ -63,7 +65,16 @@ else:
     all_notes_flatten = [item for sublist in all_notes for item in sublist]
 
     # Tokenization and vocabulary creation
-    tokenizer = create_tokenizer(all_notes)
+    #tokenizer = create_tokenizer(all_notes) #removed
+
+    # Load Tokenizer
+    tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
+    if not os.path.exists(tokenizer_path):
+        logging.warning(f"Tokenizer file not found at {tokenizer_path}. Please run train.py first.")
+        return  # Exit if the tokenizer file doesn't exist
+    with open(tokenizer_path, 'rb') as f:
+        tokenizer = pickle.load(f)
+
     if tokenizer is None:
         logging.error("Tokenizer was not created. Check preprocessing. Aborting")
         return
@@ -107,14 +118,9 @@ else:
         if not os.path.exists(model_path):
             logging.warning(f"Model file not found at {model_path}. Please run train.py first.")
             return  # Exit the function if the model file doesn't exist
-        # First, build the model by calling it with some dummy inputs
-        input_shape = (batch_size, sequence_length)
-        dummy_notes_input = tf.zeros(input_shape, dtype=tf.int32)
-        dummy_raag_input = tf.zeros((batch_size, 1), dtype=tf.int32) #modified
-        model((dummy_notes_input, dummy_raag_input), training=False)
-        logging.info("Model built")
+
         model.load_weights(model_path)
-        logging.info("Model load")
+        logging.info("Model loaded")
         # Music Generation with random seed
         logging.info("Generating Music with random seed...")
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
@@ -125,12 +131,16 @@ else:
         raag_id_value = raag_id_dict.get(raag_name, 0)
         if raag_id_value == 0 and raag_name not in raag_id_dict:
             logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Using default ID 0.")
-
+        # Music generation
         generated_sequence = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
         # Generate Raag music.
         generated_tokens_raag = generate_raag_music(model, raag_id_value, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
 
         logging.info("Music generated and saved")
+
+        # Save the generated sequence
+        with open('generated_sequence.pickle', 'wb') as f:
+          pickle.dump(generated_sequence, f)
 
 if __name__ == "__main__":
     main()
