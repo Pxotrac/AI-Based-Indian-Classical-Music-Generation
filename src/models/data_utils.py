@@ -231,7 +231,7 @@ def generate_raag_labels(all_output, raag_id_dict, num_raags):
             
             notes_count = len(data_point['notes'])  # Get the number of notes in the data point
             raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
-            all_raag_labels.extend(raag_labels)
+            all_raag_labels.extend([[label] for label in raag_labels])# modified
 
         logging.info("Raag labels generated")
         return np.array(all_raag_labels, dtype='int32')

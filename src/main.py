@@ -109,7 +109,7 @@ def main():
         # First, build the model by calling it with some dummy inputs
         input_shape = (batch_size, sequence_length)
         dummy_notes_input = tf.zeros(input_shape, dtype=tf.int32)
-        dummy_raag_input = tf.zeros((batch_size, 1), dtype=tf.int32)
+        dummy_raag_input = tf.zeros((batch_size, 1), dtype=tf.int32) #modified
         model((dummy_notes_input, dummy_raag_input), training=False)
         logging.info("Model built")
         model.load_weights(model_path)

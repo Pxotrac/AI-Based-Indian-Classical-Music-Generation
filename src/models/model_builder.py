@@ -55,13 +55,15 @@ class TransformerBlock(tf.keras.layers.Layer):
         return self.layernorm2(out1 + ffn_output)
 
 class RaagConditioning(tf.keras.layers.Layer):
-    def __init__(self, sequence_length, **kwargs):  # Add **kwargs
-        super().__init__(**kwargs)  # Pass **kwargs to super().__init__
+    def __init__(self, sequence_length, embedding_dim, **kwargs):  # Add **kwargs
+        super().__init__(**kwargs)
         self.sequence_length = sequence_length
+        self.embedding_dim = embedding_dim
+        # self.dense = tf.keras.layers.Dense(self.embedding_dim) # Removed dense layer
 
     def call(self, raag_embed):
-        return tf.tile(raag_embed, [1, self.sequence_length, 1])
-
+        raag_embed = tf.expand_dims(raag_embed, axis=1) # Add the new dimension
+        return tf.tile(raag_embed, [1, self.sequence_length, 1]) # Now we will repeat
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.sequence_length, input_shape[2])
 
@@ -73,7 +75,7 @@ class MusicTransformer(tf.keras.Model):
         self.raag_embedding_layer = tf.keras.layers.Embedding(raag_vocab_size, embedding_dim) 
         self.transformer_blocks = [TransformerBlock(embedding_dim, num_heads) for _ in range(num_layers)]
         self.dense_layer = tf.keras.layers.Dense(num_notes)  
-        self.raag_conditioning = RaagConditioning(sequence_length)  
+        self.raag_conditioning = RaagConditioning(sequence_length, embedding_dim)  
 
     def call(self, inputs, training=False):  #modified call method
         notes_input, raag_id = inputs
@@ -102,7 +104,7 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
     num_layers = 2
     # Input layers
     notes_input = Input(shape=(sequence_length,), name='notes_input')
-    raag_input = Input(shape=(1,), name='raag_input')  # Input for raag ID
+    raag_input = Input(shape=(1,), name='raag_input')  # Input for raag ID #modified
     with strategy.scope():
       model = MusicTransformer(vocab_size, embedding_dim, num_heads, num_layers, sequence_length, num_raags)
       model._name = "MusicTransformer"
