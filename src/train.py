@@ -1,12 +1,12 @@
 import os
 import logging
 import time
+import datetime
 import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels
-from models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
 from models.model_builder import create_model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tqdm import tqdm  # Import tqdm for progress bars
@@ -84,34 +84,52 @@ def main():
     sequences_dataset = create_sequences(tokenizer, all_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
     
+    # Split dataset into training and validation sets
+    # Calculate split indices
+    dataset_size = tf.data.experimental.cardinality(sequences_dataset).numpy()  # Get dataset size
+    validation_size = int(dataset_size * validation_split)  # Calculate validation size
+    train_size = dataset_size - validation_size  # Calculate training size
+
+    # Split the dataset
+    validation_dataset = sequences_dataset.take(validation_size)  # Take validation part
+    train_dataset = sequences_dataset.skip(validation_size)  # Skip validation and take rest
+
+    # Log dataset sizes
+    logging.info(f"Training dataset size: {train_size}")
+    logging.info(f"Validation dataset size: {validation_size}")
+
     end_time = time.time()  # End timer
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
-    # Model Creation and generation  within strategy.scope()
+    # Model Creation and Training within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
-         # Music Generation with random seed
-        logging.info("Generating Music with random seed...")
-        seed_sequence = generate_random_seed(tokenizer, sequence_length)
-        token_frequencies = get_token_frequencies(all_notes)
 
-        # Get raag ID, handling potential KeyError
-        raag_id_value = raag_id_dict.get('Basanti Kedar', 0)  
-        if raag_id_value == 0 and 'Basanti Kedar' not in raag_id_dict:
-            logging.warning("Raag 'Basanti Kedar' not found in raag ID dictionary. Using default ID 0.")
-
-        vocab_size = len(tokenizer.word_index) + 1
-        sequence_length = config['sequence_length']
-        generated_tokens = generate_music(
-            model, seed_sequence, raag_id_value, max_length=100, temperature=1.2, top_k=30, token_frequencies=token_frequencies, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length # Pass strategy
+        # Callbacks
+        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        checkpoint_callback = ModelCheckpoint(filepath=f'{model_name}.h5', monitor='val_loss', save_best_weights=True)
+   
+        # Train the model with early stopping and validation data
+        history = model.fit(
+            train_dataset,
+            epochs=epochs,  # Adjust as needed
+            validation_data=validation_dataset,  # Provide validation data
+            callbacks=[early_stopping, checkpoint_callback]
         )
 
-        midi_data = tokens_to_midi(generated_tokens, tokenizer)
-        midi_data.write(f"generated_music_raag_{raag_id_value}.mid")
-        generated_tokens_with_tonic = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
-        midi_data_with_tonic = tokens_to_midi(generated_tokens_with_tonic, tokenizer)
-        midi_data_with_tonic.write(f"generated_music_raag_{raag_id_value}_with_tonic.mid")
-        logging.info("Music generated and saved")
-
+    # Plot training history
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.show()
+    
+    # Save the model and tokenizer
+    model.save(f'{model_name}.h5')
+    with open(f'{tokenizer_name}.pickle', 'wb') as handle:
+        pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+   
 if __name__ == "__main__":
     main()

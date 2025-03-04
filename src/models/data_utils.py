@@ -2,11 +2,8 @@ import os
 import logging
 import numpy as np
 import pretty_midi
-import re
 from collections import Counter
-import yaml
 import tensorflow as tf
-from tqdm import tqdm  # Import tqdm for progress bars
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -15,8 +12,8 @@ def load_tonic(filepath):
     tonic_file = os.path.splitext(filepath)[0] + ".ctonic.txt"
     try:
         with open(tonic_file, 'r') as f:
-            tonic_hz_str = f.readline().strip()  # Read the first line and remove whitespace
-            tonic_hz = float(tonic_hz_str)  # Convert to float
+            tonic_hz_str = f.readline().strip()
+            tonic_hz = float(tonic_hz_str)
             return tonic_hz
     except FileNotFoundError:
         logging.warning(f"Tonic file not found: {tonic_file}")
@@ -33,7 +30,7 @@ def load_pitch_data(filepath):
     pitch_file = os.path.splitext(filepath)[0] + ".pitch.txt"
     try:
         with open(pitch_file, 'r') as f:
-            pitches = [float(line.strip()) for line in f]  # Assuming one pitch per line
+            pitches = [float(line.strip()) for line in f]
             return pitches
     except FileNotFoundError:
         logging.warning(f"Pitch file not found: {pitch_file}")
@@ -50,8 +47,8 @@ def load_sections(filepath):
     sections_file = os.path.splitext(filepath)[0] + ".sections-manual-p.txt"
     try:
         with open(sections_file, 'r') as f:
-            sections_str = f.readline().strip()  # Read the first line
-            sections = sections_str.split("|")  # Split by pipe symbol
+            sections_str = f.readline().strip()
+            sections = sections_str.split("|")
             return sections
     except FileNotFoundError:
         logging.warning(f"Sections file not found: {sections_file}")
@@ -101,33 +98,29 @@ def hz_to_svara(frequency_hz, tonic_hz):
 
 def load_and_preprocess_data(root_path, max_raags=None):
     print(f"Loading data from: {root_path}")
-    all_output = []  # Initialize the list to store all processed data
-    raag_count = 0  # Initialize a counter for the number of raags processed
+    all_output = []
+    raag_count = 0
 
-    # Iterate over all subdirectories in the root_path
     for subdir, _, files in os.walk(root_path):
-        # Check if the subdirectory is one level below the root directory
         if os.path.normpath(subdir).count(os.sep) - os.path.normpath(root_path).count(os.sep) >= 2:
             for file in files:
-                # Check if the file is a .mp3 file
                 if file.endswith(".mp3") and not file.endswith(".mp3.md5"):
                     try:
-                        filepath = os.path.join(subdir, file)  # Full path to the file
-                        raag_name = os.path.basename(os.path.dirname(filepath))  # Raag name is the subdirectory name
+                        filepath = os.path.join(subdir, file)
+                        raag_name = os.path.basename(os.path.dirname(filepath))
 
-                        # Load data based on the current 'filepath'
                         tonic_hz = load_tonic(filepath)
                         pitch_data = load_pitch_data(filepath)
-                        sections = load_sections(filepath)  # Corrected line
+                        sections = load_sections(filepath)
                         if pitch_data:
-                            pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]  # Convert pitches to svaras
-                        processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}  # Create data dictionary
-                        all_output.append(processed_data)  # Add the processed data to the output list
-                        raag_count += 1  # Increment the raag counter
+                            pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]
+                        processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
+                        all_output.append(processed_data)
+                        raag_count += 1
                     except Exception as e:
-                        logging.error(f"Error processing file {filepath}: {e}")  # Log an error if a file fails
-    logging.info(f"Total raags processed: {raag_count}")  # Log the total number of raags processed
-    print(f"Total raags processed: {raag_count}")  # Print total raags processed
+                        logging.error(f"Error processing file {filepath}: {e}")
+    logging.info(f"Total raags processed: {raag_count}")
+    print(f"Total raags processed: {raag_count}")
     return all_output
 
 def extract_all_notes(all_output):
@@ -147,7 +140,7 @@ def extract_all_notes(all_output):
 def create_tokenizer(all_notes):
     """Creates a Keras tokenizer for the notes."""
     logging.info("Creating tokenizer...")
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=False, oov_token="<unk>")  # Use TensorFlow's tokenizer
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(char_level=False, oov_token="<unk>")
     tokenizer.fit_on_texts(all_notes)
     logging.info("Tokenizer created.")
     return tokenizer
@@ -156,37 +149,26 @@ def create_tokenizer(all_notes):
 def create_sequences(tokenizer, all_notes, sequence_length, batch_size, raag_labels):
     """Transforms a list of notes into sequences suitable for training using tf.data.Dataset."""
     logging.info("Creating sequences...")
-
-    # Convert all_notes to a TensorFlow tensor
     all_notes_tensor = tf.constant(all_notes, dtype=tf.string)
-
-    # Use tf.data.Dataset for sequence creation
     dataset = tf.data.Dataset.from_tensor_slices(all_notes_tensor)
-    dataset = dataset.window(sequence_length + 1, shift=1, drop_remainder=True)  # Include target note
+    dataset = dataset.window(sequence_length + 1, shift=1, drop_remainder=True)
     dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
     dataset = dataset.map(lambda sequence: tokenize_sequence_tf(tokenizer, sequence))
 
-    # Convert raag_labels to a TensorFlow tensor and create a dataset for it
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
     raag_labels_dataset = tf.data.Dataset.from_tensor_slices(raag_labels_tensor)
-    # Create a combined dataset with sequences and corresponding raag labels
     dataset = tf.data.Dataset.zip((dataset, raag_labels_dataset))
-
-    # Batch the combined dataset
     dataset = dataset.batch(batch_size)
-
-    # Prefetch for performance
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
-    return dataset  # Return the tf.data.Dataset
+    return dataset
 
 
 def extract_raag_names(all_output):
     """Extracts the raag names from the dataset directory."""
     raag_names = set()  # Use a set for uniqueness
-    for artist_data in all_output:
-        for song_data in artist_data['songs']:
-            raag_names.add(song_data['raag'])  # Add raag name to the set
+    for data_point in all_output:
+      raag_names.add(data_point['raag'])
     return list(raag_names)  # Convert the set back to a list
 
 def create_raag_id_mapping(all_output):
