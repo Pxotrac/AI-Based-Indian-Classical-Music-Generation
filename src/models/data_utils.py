@@ -107,7 +107,7 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
         return None
 
-def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
+def load_and_preprocess_data(repo_dir, data_path, max_raags=None, min_notes=100): #modified add min_notes
     """Loads and preprocesses data from the dataset directory."""
     print(f"Loading data from: {data_path}") #change
     logging.info(f"Loading data from: {data_path}") #change
@@ -145,10 +145,12 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
                                     sections = load_sections(filepath)
                                     if pitch_data:
                                         pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data if pitch !=0] # Only add not 0
-                                        if len(pitch_data) > 0:
+                                        if len(pitch_data) > min_notes: #added check length
                                             processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
                                             all_output.append(processed_data)
                                             raag_count += 1
+                                        else: #added
+                                          logging.warning(f"Skipping raag {raag_name} because it has less than {min_notes} notes.")#added
                                 else:
                                     logging.warning(f"Pitch file not found: {filepath}")
                             except Exception as e:
