@@ -95,30 +95,41 @@ def hz_to_svara(frequency_hz, tonic_hz):
         return f"{closest_svara}{octave}"
     else:
         return None
+
 def load_and_preprocess_data(root_path, max_raags=None):
     print(f"Loading data from: {root_path}")
     all_output = []
     raag_count = 0
+    # Check if the extra 'hindustani' folder exists
+    if os.path.exists(os.path.join(root_path, "hindustani", "hindustani")):
+        dataset_folder = os.path.join(root_path, "hindustani", "hindustani") # For Colab folder structure
+    else:
+        dataset_folder = os.path.join(root_path, "hindustani") # For local folder structure
 
-    for subdir, _, files in os.walk(root_path):
-        if os.path.normpath(subdir).count(os.sep) - os.path.normpath(root_path).count(os.sep) >= 2:
-            for file in files:
-                if file.endswith(".pitch.txt"): # change mp3 for pitch.txt
-                    try:
-                        filepath = os.path.join(subdir, file)
-                        raag_name = os.path.basename(os.path.dirname(filepath))
-                        
-                        # load the data with the pitch filepath
-                        tonic_hz = load_tonic(filepath)
-                        pitch_data = load_pitch_data(filepath)
-                        sections = load_sections(filepath)
-                        if pitch_data:
-                            pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]
-                        processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
-                        all_output.append(processed_data)
-                        raag_count += 1
-                    except Exception as e:
-                        logging.error(f"Error processing file {filepath}: {e}")
+    for artist_folder in os.listdir(dataset_folder):
+        artist_path = os.path.join(dataset_folder, artist_folder)
+        if os.path.isdir(artist_path):
+            for raag_folder in os.listdir(artist_path):
+                raag_path = os.path.join(artist_path, raag_folder)
+                if os.path.isdir(raag_path):
+                    for file in os.listdir(raag_path):
+                        if file.endswith(".pitch.txt"):
+                            try:
+                                filepath = os.path.join(raag_path, file)
+                                raag_name = os.path.basename(raag_path)
+                                
+                                # load the data with the pitch filepath
+                                tonic_hz = load_tonic(filepath)
+                                pitch_data = load_pitch_data(filepath)
+                                sections = load_sections(filepath)
+                                if pitch_data:
+                                    pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data]
+                                processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
+                                all_output.append(processed_data)
+                                raag_count += 1
+                            except Exception as e:
+                                logging.error(f"Error processing file {filepath}: {e}")
+
     logging.info(f"Total raags processed: {raag_count}")
     print(f"Total raags processed: {raag_count}")
     return all_output
