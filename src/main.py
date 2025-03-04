@@ -35,9 +35,7 @@ def main():
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
-    dataset_path_local = config['dataset_path'] # now is "dataset"
-    repo_dir = "/content/drive/MyDrive/music_generation_repo"
-    dataset_path = os.path.join(repo_dir, dataset_path_local)  # Get the dataset path inside the repo_dir
+    dataset_path = config['dataset_path'] 
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
@@ -74,6 +72,9 @@ def main():
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
 
+    if num_raags == 0:
+      logging.error("No raags were found. Please check your data.")
+      return
     # Generate raag labels
     logging.info("Generating raag labels...")
     raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
@@ -93,6 +94,12 @@ def main():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         #load the model
         model_path = os.path.join("models", f"{model_name}.h5")
+        # First, build the model by calling it with some dummy inputs
+        input_shape = (batch_size, sequence_length)
+        dummy_notes_input = tf.zeros(input_shape, dtype=tf.int32)
+        dummy_raag_input = tf.zeros((batch_size, 1), dtype=tf.int32)
+        model(dummy_notes_input, dummy_raag_input, training=False)
+        logging.info("Model built")
         model.load_weights(model_path)
         logging.info("Model load")
         # Music Generation with random seed
