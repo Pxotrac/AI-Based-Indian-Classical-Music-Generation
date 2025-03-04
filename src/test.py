@@ -34,14 +34,23 @@ def main():
           logging.error("No data was found. Aborting")
           return
         all_notes = extract_all_notes(all_output)
-        tokenizer = create_tokenizer(all_notes)
+        all_notes_flatten = [item for sublist in all_notes for item in sublist]
+        tokenizer = create_tokenizer(all_notes_flatten)
         if tokenizer is None:
           logging.error("Tokenizer was not created. Check preprocessing. Aborting")
           return
+        if len(tokenizer.word_index) < 2:
+            logging.error("Tokenizer created a vocabulary with less than 2 words. Check your notes data. Aborting.")
+            return
         vocab_size = len(tokenizer.word_index) + 1
         logging.info(f"Tokenizer created successfully!")
         logging.info(f"Vocabulary size: {vocab_size}")  # Check the number of tokens
-        logging.info(f"First 5 words in the vocabulary {list(tokenizer.word_index.items())[:5]}")
+        logging.info(f"First 5 words in the vocabulary: {list(tokenizer.word_index.items())[:5]}")
+        logging.info(f"Loaded {len(all_output)} data samples.")
+        for i, item in enumerate(all_output): # add this loop
+          logging.info(f"Data sample {i}: {item}") #added
+          if i >= 5: #added
+            break #added
 
     except Exception as e:
         logging.error(f"Error creating the tokenizer: {e}")

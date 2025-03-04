@@ -42,36 +42,42 @@ def main():
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
 
- # Data paths
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE": #added
-         data_path = "/content/drive/MyDrive/" #added
-         repo_dir = "/content/drive/MyDrive/music_generation_repo" #added
-         print(f"Running on Colab. repo_dir: {repo_dir}") #added
-         print(f"Running on Colab. data_path: {data_path}") #added
-    else: #added
-         repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) #added
-         data_path = os.path.dirname(repo_dir) #added
-         print(f"Running locally. repo_dir: {repo_dir}") #added
-         print(f"Running locally. data_path: {data_path}") #added
+    # Data paths
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":  # added
+        data_path = "/content/drive/MyDrive/"  # added
+        repo_dir = "/content/drive/MyDrive/music_generation_repo"  # added
+        print(f"Running on Colab. repo_dir: {repo_dir}")  # added
+        print(f"Running on Colab. data_path: {data_path}")  # added
+    else:  # added
+        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # added
+        data_path = os.path.dirname(repo_dir)  # added
+        print(f"Running locally. repo_dir: {repo_dir}")  # added
+        print(f"Running locally. data_path: {data_path}")  # added
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
-    batch_size = config['batch_size'] # added
-    
+    batch_size = config['batch_size']  # added
+
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
     start_time = time.time()  # Start timer
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path) #change
+    all_output = load_and_preprocess_data(repo_dir, data_path)  # change
     logging.info("Data loaded.")
+    if all_output is None or len(all_output) == 0:
+        logging.error("No data was loaded. Check the data. Aborting")
+        return
 
     # Extract all notes
     all_notes = extract_all_notes(all_output)  # Function to extract all notes from all_output
     all_notes_flatten = [item for sublist in all_notes for item in sublist]
+    if len(all_notes_flatten) == 0:
+        logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
+        return  # now the return is inside the function
 
     # Tokenization and vocabulary creation
-    #tokenizer = create_tokenizer(all_notes) #removed
+    # tokenizer = create_tokenizer(all_notes) #removed
 
     # Load Tokenizer
     tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
@@ -84,6 +90,9 @@ def main():
     if tokenizer is None:
         logging.error("Tokenizer was not created. Check preprocessing. Aborting")
         return
+    if len(tokenizer.word_index) < 2:
+        logging.error("Tokenizer created a vocabulary with less than 2 words. Check your notes data. Aborting.")
+        return
 
     vocab_size = len(tokenizer.word_index) + 1
     logging.info(f"Vocab size: {vocab_size}")
@@ -91,8 +100,8 @@ def main():
     if vocab_size <= 1:
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
         return  # Stop execution if vocab size is too small
-    
-     # Raag ID mapping
+
+    # Raag ID mapping
     logging.info("Creating raag ID mapping...")
     raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
     logging.info("Raag ID mapping complete")
@@ -100,26 +109,26 @@ def main():
     print(f"Raag ID dict: {raag_id_dict}")
 
     if num_raags == 0:
-      logging.error("No raags were found. Please check your data.")
-      return
+        logging.error("No raags were found. Please check your data.")
+        return
     # Generate raag labels
     logging.info("Generating raag labels...")
     raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
     logging.info("Raag labels generated")
-    
+
     # Tokenize all notes
     tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
-    
+
     end_time = time.time()  # End timer
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
     # Model Creation and generation  within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
-        #load the model
+        # load the model
         model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
         # Check if the model file exists before loading
         if not os.path.exists(model_path):
@@ -147,7 +156,7 @@ def main():
 
         # Save the generated sequence
         with open('generated_sequence.pickle', 'wb') as f:
-          pickle.dump(generated_sequence, f)
+            pickle.dump(generated_sequence, f)
 
 if __name__ == "__main__":
     main()

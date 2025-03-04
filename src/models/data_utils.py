@@ -104,12 +104,13 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
     raag_count = 0
     
     # Check if the 'hindustani' folder exists
-    if os.path.exists(os.path.join(data_path, "hindustani")): #change
-        dataset_folder = os.path.join(data_path, "hindustani") #change
-        logging.info(f"Dataset folder found: {dataset_folder}")
+    dataset_folder = os.path.join(data_path, "hindustani","hindustani") #change
+    logging.info(f"Checking for dataset folder at: {dataset_folder}") #added
+    if not os.path.exists(dataset_folder): # added
+                logging.error(f"Dataset not found in path: {dataset_folder}. There is no 'hindustani' folder inside 'hindustani'") #changed
+                return []
     else:
-        logging.error(f"Dataset not found in path: {os.path.join(data_path, 'hindustani')}") #change
-        return []
+        logging.info(f"Dataset folder found: {dataset_folder}")
 
     for artist_folder in os.listdir(dataset_folder):
         artist_path = os.path.join(dataset_folder, artist_folder)
@@ -127,15 +128,18 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
                                 raag_name = os.path.basename(raag_path)
                                 
                                 # load the data with the pitch filepath
-                                tonic_hz = load_tonic(filepath)
-                                pitch_data = load_pitch_data(filepath)
-                                sections = load_sections(filepath)
-                                if pitch_data:
-                                    pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data if pitch !=0] # Only add not 0
-                                    if len(pitch_data) > 0:
-                                        processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
-                                        all_output.append(processed_data)
-                                        raag_count += 1
+                                if os.path.exists(filepath):# Verify that the file exist.
+                                    tonic_hz = load_tonic(filepath)
+                                    pitch_data = load_pitch_data(filepath)
+                                    sections = load_sections(filepath)
+                                    if pitch_data:
+                                        pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data if pitch !=0] # Only add not 0
+                                        if len(pitch_data) > 0:
+                                            processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
+                                            all_output.append(processed_data)
+                                            raag_count += 1
+                                else:
+                                    logging.warning(f"Pitch file not found: {filepath}")
                             except Exception as e:
                                 logging.error(f"Error processing file {filepath}: {e}")
     if raag_count == 0:
@@ -154,7 +158,7 @@ def extract_all_notes(all_output):
         if notes is None:
             logging.warning(f"No notes found for {data_point.get('raag')}. Skipping.")
             continue
-        all_notes.append(notes)
+        all_notes.extend(notes) #modified
     logging.info(f"Total number of notes found: {len(all_notes)}")
     return all_notes
 
@@ -163,12 +167,9 @@ def create_tokenizer(all_notes):
     if not all_notes or len(all_notes) == 0:
         logging.error("No notes provided to create a tokenizer. Aborting.")
         return None
-    
-    # Flatten the list of lists
-    all_notes_flatten = [item for sublist in all_notes for item in sublist]
 
     tokenizer = tf.keras.preprocessing.text.Tokenizer(filters='', lower=False, oov_token="<unk>")  # Removed filters and set lower=False
-    tokenizer.fit_on_texts(all_notes_flatten)
+    tokenizer.fit_on_texts(all_notes) # modified
     return tokenizer
 
 def tokenize_all_notes(tokenizer, all_notes):
@@ -186,14 +187,14 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences from tokenized notes, batching and adding raag labels."""
     logging.info("Creating sequences...")
     sequences_with_labels = []
-    for i, seq in enumerate(tokenized_notes):
+    for i, seq in enumerate(tokenized_notes): #changed
         if len(seq) < sequence_length + 1:  # Add +1 to account for the target note
           continue
         for j in range(0, len(seq) - sequence_length):
             input_sequence = seq[j:j+sequence_length]
             # Check if raag_labels has enough labels
-            if len(raag_labels) > i and len(raag_labels[i]) > 0:
-              target_raag_id = raag_labels[i][0]  # Get raag_id from raag_labels
+            if len(raag_labels) > i: # changed
+              target_raag_id = raag_labels[j]  # Get raag_id from raag_labels
               sequences_with_labels.append((input_sequence, target_raag_id, seq[j+sequence_length]))
             else:
               logging.warning(f"Not enough labels for sequence {i}. Skipping.")
@@ -251,7 +252,7 @@ def generate_raag_labels(all_output, raag_id_dict, num_raags): #added
 
         notes_count = len(data_point.get('notes')) # Get the number of notes in the data point
         raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
-        all_raag_labels.extend([[label] for label in raag_labels])# modified
+        all_raag_labels.extend(raag_labels)# modified
 
     logging.info(f"Total raag labels generated: {len(all_raag_labels)}")
     return all_raag_labels
