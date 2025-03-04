@@ -60,9 +60,8 @@ class RaagConditioning(tf.keras.layers.Layer):
         self.sequence_length = sequence_length
         self.embedding_dim = embedding_dim
 
-    def call(self, raag_embed): 
-        raag_embed = tf.expand_dims(raag_embed, axis=1)#Add the dimension
-        return tf.tile(raag_embed, [1, self.sequence_length, 1]) # Now we will repeat
+    def call(self, raag_embed): # Modified
+        return tf.tile(raag_embed, [1, self.sequence_length, 1])
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.sequence_length, input_shape[2])
@@ -84,8 +83,8 @@ class MusicTransformer(tf.keras.Model):
 
         # Raag Embedding and Conditioning
         raag_embeddings = self.raag_embedding_layer(raag_id)
-        #raag_embeddings = tf.squeeze(raag_embeddings, axis=1) #Removed this line
-        raag_embeddings = self.raag_conditioning(raag_embeddings) 
+        raag_embeddings = tf.squeeze(raag_embeddings, axis=1)# Added this line
+        raag_embeddings = self.raag_conditioning(raag_embeddings) #modified
 
         # Combine Embeddings 
         x = note_embeddings + raag_embeddings  
