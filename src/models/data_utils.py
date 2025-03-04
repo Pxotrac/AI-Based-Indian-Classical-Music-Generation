@@ -115,10 +115,10 @@ def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #change
         artist_path = os.path.join(dataset_folder, artist_folder)
         logging.info(f"Processing artist folder: {artist_path}")  # New logging
         if os.path.isdir(artist_path):
-            for raag_folder in os.listdir(artist_path):
-                raag_path = os.path.join(artist_path, raag_folder)
+            for raag_folder in os.listdir(artist_path):#added raag loop
+                raag_path = os.path.join(artist_path, raag_folder) #added raag path
                 logging.info(f"  Processing raag folder: {raag_path}")  # New logging
-                if os.path.isdir(raag_path):
+                if os.path.isdir(raag_path): #added verify raag is a directory
                     for file in os.listdir(raag_path):
                         if file.endswith(".pitch.txt"):
                             try:

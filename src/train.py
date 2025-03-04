@@ -31,8 +31,14 @@ else:
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
-    # Load Config - Now always load config.yaml
-    config_file = "config.yaml"  # Always use config.yaml
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+        repo_dir = "/content/drive/MyDrive/music_generation_repo"
+    else:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
+
+    # Load Config - Now always load config.yaml with absolute path
+    config_file = os.path.join(repo_dir, "config.yaml")  # Use absolute path
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
     
@@ -42,8 +48,6 @@ def main():
         print(f"Running on Colab. repo_dir: {repo_dir}")
         print(f"Running on Colab. data_path: {data_path}")
     else:
-        repo_dir = os.path.dirname(os.path.abspath(__file__))
-        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
         data_path = os.path.dirname(repo_dir)
         print(f"Running locally. repo_dir: {repo_dir}")
         print(f"Running locally. data_path: {data_path}")
