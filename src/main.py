@@ -5,10 +5,9 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
-from models.music_utils import generate_music, tokens_to_midi, generate_raag_music, generate_music_with_tonic, generate_random_seed, get_token_frequencies
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes, get_token_frequencies
+from models.music_utils import generate_music_with_tonic, generate_random_seed
 from models.model_builder import create_model
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tqdm import tqdm  # Import tqdm for progress bars
 
 # Set up logging
@@ -32,7 +31,13 @@ print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
     # Load Config
-    with open("config.yaml", "r") as f:
+    # Determine config file based on the environment
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+        config_file = "config_colab.yaml"
+    else:
+        config_file = "config.yaml"
+    
+    with open(config_file, "r") as f:
         config = yaml.safe_load(f)
     # Check if running on Colab and set repo_dir accordingly
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
@@ -41,7 +46,7 @@ def main():
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(repo_dir)  # Go up one more level
 
-    dataset_path = config['dataset_path'] 
+    dataset_path = os.path.join(repo_dir, config['dataset_path'])
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')  # Get model_name from config, default to 'my_model'
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
@@ -100,6 +105,10 @@ def main():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         #load the model
         model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
+        # Check if the model file exists before loading
+        if not os.path.exists(model_path):
+            logging.warning(f"Model file not found at {model_path}. Please run train.py first.")
+            return  # Exit the function if the model file doesn't exist
         # First, build the model by calling it with some dummy inputs
         input_shape = (batch_size, sequence_length)
         dummy_notes_input = tf.zeros(input_shape, dtype=tf.int32)
@@ -114,9 +123,10 @@ def main():
         token_frequencies = get_token_frequencies(all_notes_flatten)
 
         # Get raag ID, handling potential KeyError
-        raag_id_value = raag_id_dict.get('Basanti Kedar', 0)  
-        if raag_id_value == 0 and 'Basanti Kedar' not in raag_id_dict:
-            logging.warning("Raag 'Basanti Kedar' not found in raag ID dictionary. Using default ID 0.")
+        raag_name = 'Basanti Kedar'
+        raag_id_value = raag_id_dict.get(raag_name, 0)
+        if raag_id_value == 0 and raag_name not in raag_id_dict:
+            logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Using default ID 0.")
 
         generated_tokens_with_tonic = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
         logging.info("Music generated and saved")

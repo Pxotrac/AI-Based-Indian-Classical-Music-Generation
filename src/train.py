@@ -6,7 +6,7 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, extract_raag_names, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
 from models.model_builder import create_model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tqdm import tqdm  # Import tqdm for progress bars
@@ -32,11 +32,23 @@ print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
     # Load Config
-    with open("config.yaml", "r") as f:
+    # Determine config file based on the environment
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+        config_file = "config_colab.yaml"
+    else:
+        config_file = "config.yaml"
+
+    with open(config_file, "r") as f:
         config = yaml.safe_load(f)
-    repo_dir = "/content/drive/MyDrive/music_generation_repo"
-    dataset_path_local = config['dataset_path']
-    dataset_path = os.path.join(repo_dir, dataset_path_local)  # Get the dataset path inside the repo_dir
+    
+    # Check if running on Colab and set repo_dir accordingly
+    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
+        repo_dir = "/content/drive/MyDrive/music_generation_repo"
+    else:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
+
+    dataset_path = os.path.join(repo_dir, config['dataset_path'])  # Get the dataset path inside the repo_dir
     sequence_length = config['sequence_length']
     epochs = config['epochs']
     batch_size = config['batch_size']
@@ -75,6 +87,9 @@ def main():
     raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
+    if num_raags == 0:
+      logging.error("No raags were found. Please check your data.")
+      return
 
     # Generate raag labels
     logging.info("Generating raag labels...")
@@ -152,6 +167,7 @@ def main():
         plt.title('Training and Validation Loss')
 
         plt.tight_layout()
+        os.makedirs(os.path.join(repo_dir,"plots"), exist_ok=True) # create the path if it doesn't exist
         plt.savefig(os.path.join(repo_dir,"plots", f"{model_name}_training_history.png"))
         logging.info("Training history plot saved.")
 

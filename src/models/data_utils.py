@@ -97,18 +97,17 @@ def hz_to_svara(frequency_hz, tonic_hz):
         return None
 
 def load_and_preprocess_data(root_path, max_raags=None):
+    """Loads and preprocesses data from the dataset directory."""
     print(f"Loading data from: {root_path}")
     all_output = []
     raag_count = 0
     
-    # Check if the extra 'hindustani' folder exists for Colab
-    if os.path.exists(os.path.join(root_path, "hindustani", "hindustani")):
-        dataset_folder = os.path.join(root_path, "hindustani", "hindustani") # For Colab folder structure
-    elif os.path.exists(os.path.join(root_path, "hindustani")):
-        dataset_folder = os.path.join(root_path, "hindustani") # For local folder structure
+    # Check if the 'hindustani' folder exists
+    if os.path.exists(os.path.join(root_path, "hindustani")):
+        dataset_folder = os.path.join(root_path, "hindustani")
     else:
-        logging.error(f"Dataset not found in path")
-        return
+        logging.error(f"Dataset not found in path: {os.path.join(root_path, 'hindustani')}")
+        return []
 
     for artist_folder in os.listdir(dataset_folder):
         artist_path = os.path.join(dataset_folder, artist_folder)
@@ -133,6 +132,8 @@ def load_and_preprocess_data(root_path, max_raags=None):
                                 raag_count += 1
                             except Exception as e:
                                 logging.error(f"Error processing file {filepath}: {e}")
+    if raag_count == 0:
+        logging.error("No raags found. Please check your dataset structure.")
 
     logging.info(f"Total raags processed: {raag_count}")
     print(f"Total raags processed: {raag_count}")
