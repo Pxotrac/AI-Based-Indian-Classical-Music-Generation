@@ -210,7 +210,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
         for j in range(0, len(seq) - sequence_length):
             input_sequence = seq[j:j+sequence_length]
             # Check if raag_labels has enough labels
-            if len(raag_labels) > i: # changed
+            if len(raag_labels) > j: # changed
               target_raag_id = raag_labels[j]  # Get raag_id from raag_labels
               sequences_with_labels.append((input_sequence, target_raag_id, seq[j+sequence_length]))
             else:
