@@ -1,7 +1,6 @@
 import os
 import logging
 import time
-import datetime
 import yaml
 import pickle
 import tensorflow as tf
@@ -118,6 +117,7 @@ def main():
     logging.info(f"Number of raag labels: {len(raag_labels)}")
     logging.info(f"Batch size: {batch_size * strategy.num_replicas_in_sync}")
 
+    logging.info(f"Dataset size before creation: {len(tokenized_notes) - sequence_length}")
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
