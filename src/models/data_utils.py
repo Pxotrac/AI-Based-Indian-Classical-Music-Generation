@@ -190,7 +190,10 @@ def create_tokenizer(all_notes):
 def tokenize_all_notes(tokenizer, all_notes):
     """Tokenizes all notes using the provided tokenizer."""
     logging.info("Tokenizing all notes...")
+    start_time = time.time()  # Start timer
     tokenized_notes = tokenizer.texts_to_sequences(all_notes)
+    end_time = time.time()  # End timer
+    logging.info(f"Tokenizing all notes took {end_time - start_time:.2f} seconds")
     return [item for sublist in tokenized_notes for item in sublist]
 
 def tokenize_sequence(tokenizer, sequence):
@@ -201,6 +204,7 @@ def tokenize_sequence(tokenizer, sequence):
 def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences and labels for model training using tf.data.Dataset."""
     logging.info("Creating sequences...")
+    start_time = time.time()
 
     # Check if tokenized_notes is empty or if sequence_length is invalid
     if not tokenized_notes or sequence_length <= 0:
@@ -233,7 +237,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
         next_notes.append(seq_out)
         raag_ids.append(raag_labels[i])
 
-    logging.info(f"Sequences created: {len(sequences)}")
+    logging.info(f"Sequences created: {len(sequences)}") # added logging
     logging.info(f"Next notes created: {len(next_notes)}")
     logging.info(f"Raag ids created: {len(raag_ids)}")
 
@@ -256,7 +260,9 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     dataset = tf.data.Dataset.from_tensor_slices(((sequences, raag_ids), next_notes))
     dataset = dataset.batch(batch_size)
     logging.info(f"Dataset created with batch size: {batch_size}")
-    logging.info("Sequences created successfully")
+    logging.info("Sequences created successfully") #added
+    end_time = time.time()  # End timer
+    logging.info(f"create_sequences took {end_time - start_time:.2f} seconds")
 
     return dataset
 

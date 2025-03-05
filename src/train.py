@@ -38,7 +38,6 @@ def main():
         print(f"Running on Colab. data_path: {data_path}")
     else:
         repo_dir = os.path.dirname(os.path.abspath(__file__))
-        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
         data_path = os.path.dirname(repo_dir)
         print(f"Running locally. repo_dir: {repo_dir}")
         print(f"Running locally. data_path: {data_path}")
@@ -117,6 +116,7 @@ def main():
     # Check sequence length and raag labels length
     logging.info(f"Sequence length: {sequence_length}")
     logging.info(f"Number of raag labels: {len(raag_labels)}")
+    logging.info(f"Batch size: {batch_size * strategy.num_replicas_in_sync}")
 
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
@@ -126,6 +126,7 @@ def main():
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
     # Split the dataset in train and validation
+    logging.info(f"Dataset size: {tf.data.experimental.cardinality(sequences_dataset).numpy()}")
     dataset_size = tf.data.experimental.cardinality(sequences_dataset).numpy()
     train_size = int(dataset_size * (1 - validation_split))
     train_dataset = sequences_dataset.take(train_size)
