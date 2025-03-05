@@ -223,7 +223,8 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
 
     if not sequences_with_labels:
         logging.warning("No sequences created. Check your input data and parameters.")
-        return tf.data.Dataset.from_tensor_slices((tf.constant([]), tf.constant([]), tf.constant([]))).batch(batch_size)
+        # Return an empty dataset
+        return tf.data.Dataset.from_tensor_slices((tf.constant([]), tf.constant([]))).batch(batch_size)
 
     np.random.shuffle(sequences_with_labels)
     features, raag_ids, targets = zip(*sequences_with_labels)

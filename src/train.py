@@ -54,7 +54,7 @@ def main():
     validation_split = config['validation_split']
     patience = config['patience']
     model_name = config.get('model_name', 'my_model')  # Get model_name from config, default to 'my_model'
-    tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')  # Get tokenizer_name, default to 'my_tokenizer'
+    tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')  # Get tokenizer_name from config, default to 'my_tokenizer'
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -110,6 +110,10 @@ def main():
         logging.debug(f"First tokenized note: {tokenized_notes[0]}")  # Debug log
     else:
         logging.warning("tokenized_notes is empty.")  # Debug log
+
+    # Check sequence length and raag labels length
+    logging.info(f"Sequence length: {sequence_length}")
+    logging.info(f"Number of raag labels: {len(raag_labels)}")
 
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
