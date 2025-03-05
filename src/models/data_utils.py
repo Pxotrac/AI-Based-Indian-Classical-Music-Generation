@@ -200,7 +200,6 @@ def tokenize_sequence(tokenizer, sequence):
     tokenized_sequence = tokenizer.texts_to_sequences([sequence])  # Pass as a list of strings
     return tokenized_sequence[0]  # Return the first (and only) list of tokenized sequences
 
-
 def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences from tokenized notes, batching and adding raag labels."""
     logging.info("Creating sequences...")
@@ -210,6 +209,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     logging.debug(f"Number of raag labels: {len(raag_labels)}")
     
     for i, seq in enumerate(tokenized_notes):
+        logging.debug(f"Processing tokenized note {i} with length {len(seq)}")
         if len(seq) < sequence_length + 1:
             logging.debug(f"Skipping sequence {i} because it is too short (length: {len(seq)})")
             continue
