@@ -57,7 +57,7 @@ def main():
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')
-    batch_size = config['batch_size']
+    batch_size = config['batch_size'] *2 # Increased batch size
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -71,9 +71,9 @@ def main():
         return
 
     # Extract all notes
-    all_notes = extract_all_notes(all_output)
-    all_notes_flatten = [item for sublist in all_notes for item in sublist]
-    if len(all_notes_flatten) == 0:
+    all_notes, all_output_filtered = extract_all_notes(all_output) #added filtered output
+    
+    if len(all_notes) == 0:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
         return
 
@@ -101,7 +101,7 @@ def main():
 
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(all_output)
+    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered) #added filtered raag
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
     print(f"Raag ID dict: {raag_id_dict}")
@@ -112,16 +112,17 @@ def main():
 
     # Generate raag labels
     logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)
+    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags) #added filtered raag
     logging.info("Raag labels generated")
 
     # Tokenize all notes
     tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
     logging.debug(f"Tokenized notes: {tokenized_notes[:5]}")  # Log the first 5 tokenized notes for debugging
     logging.debug(f"Raag labels: {raag_labels[:5]}")  # Log the first 5 raag labels for debugging
-
-    # Check expected lengths
-    check_expected_lengths(tokenized_notes, raag_labels, sequence_length)
+    logging.info(f"Sequence length: {sequence_length}")
+    logging.info(f"Number of raag labels: {len(raag_labels)}")
+    logging.info(f"Number of tokenized_notes: {len(tokenized_notes)}")
+    if len(tokenized_notes)>10: logging.info(f"First 10 tokenized_notes: {tokenized_notes[:10]}")
 
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
@@ -145,7 +146,8 @@ def main():
         # Music Generation with random seed
         logging.info("Generating Music with random seed...")
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
-        token_frequencies = get_token_frequencies(all_notes_flatten)
+        token_frequencies = get_token_frequencies(all_notes) # modified
+        
 
         # Get raag ID, handling potential KeyError
         raag_name = 'Basanti Kedar'
@@ -163,5 +165,13 @@ def main():
         with open('generated_sequence.pickle', 'wb') as f:
             pickle.dump(generated_sequence, f)
 
+def check_expected_lengths(tokenized_notes, raag_labels, sequence_length):
+    """Checks and logs the expected lengths of tokenized_notes, raag_labels, and sequence_length."""
+    logging.info("Checking expected lengths...")
+    logging.info(f"Expected length of raag_labels: {len(tokenized_notes) - sequence_length if tokenized_notes and sequence_length else 'N/A'}")
+    logging.info(f"Actual length of tokenized_notes: {len(tokenized_notes)}")
+    logging.info(f"Actual length of raag_labels: {len(raag_labels)}")
+    logging.info(f"Sequence length: {sequence_length}")
+    logging.info("Length check completed.")
 if __name__ == "__main__":
     main()

@@ -50,7 +50,7 @@ def main():
 
     sequence_length = config['sequence_length']
     epochs = config['epochs']
-    batch_size = config['batch_size']
+    batch_size = config['batch_size'] * 2
     validation_split = config['validation_split']
     patience = config['patience']
     model_name = config.get('model_name', 'my_model')  # Get model_name from config, default to 'my_model'
@@ -107,6 +107,9 @@ def main():
     tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
     logging.debug(f"Number of tokenized_notes: {len(tokenized_notes)}")  # Debug log
     if tokenized_notes:
+        if len(tokenized_notes)>=10:
+            logging.debug(f"First 10 tokenized_notes: {tokenized_notes[:10]}")  # Debug log
+        
         logging.debug(f"First tokenized note: {tokenized_notes[0]}")  # Debug log
     else:
         logging.warning("tokenized_notes is empty.")  # Debug log
@@ -131,6 +134,8 @@ def main():
     # Model Creation, compilation and training within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
+        # Compile the model INSIDE strategy.scope()
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         # Model Checkpoint
         checkpoint_filepath = os.path.join(repo_dir, "checkpoints", f"{model_name}.h5")

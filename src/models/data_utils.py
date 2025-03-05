@@ -4,14 +4,15 @@ import numpy as np
 import pretty_midi
 from collections import Counter
 import tensorflow as tf
+import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def load_tonic(filepath):
     """Loads the tonic (Sa) frequency from the .ctonic.txt file."""
-    directory = os.path.dirname(filepath) #added
-    file_name = os.path.basename(filepath).replace(".pitch.txt",".ctonic.txt") # added
-    tonic_file = os.path.join(directory,file_name) #added
+    directory = os.path.dirname(filepath)
+    file_name = os.path.basename(filepath).replace(".pitch.txt",".ctonic.txt")
+    tonic_file = os.path.join(directory,file_name)
     try:
         with open(tonic_file, 'r') as f:
             tonic_hz_str = f.readline().strip()
@@ -33,10 +34,10 @@ def load_pitch_data(filepath):
     try:
         with open(filepath, 'r') as f:
             for line in f:
-                line = line.strip() #added
-                if '\t' in line: #added
-                    parts = line.split('\t') # added
-                    line = parts[0]  #added take only the first part
+                line = line.strip()
+                if '\t' in line:
+                    parts = line.split('\t')
+                    line = parts[0]
                 try:
                     pitch = float(line)
                     pitches.append(pitch)
@@ -53,9 +54,9 @@ def load_pitch_data(filepath):
 
 def load_sections(filepath):
     """Loads section markers from the .sections-manual-p.txt file."""
-    directory = os.path.dirname(filepath) #added
-    file_name = os.path.basename(filepath).replace(".pitch.txt",".sections-manual-p.txt") # added
-    sections_file = os.path.join(directory,file_name) #added
+    directory = os.path.dirname(filepath)
+    file_name = os.path.basename(filepath).replace(".pitch.txt",".sections-manual-p.txt")
+    sections_file = os.path.join(directory,file_name)
     try:
         with open(sections_file, 'r') as f:
             sections_str = f.readline().strip()
@@ -107,18 +108,18 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
         return None
 
-def load_and_preprocess_data(repo_dir, data_path, max_raags=None): #modified removed min notes
+def load_and_preprocess_data(repo_dir, data_path, max_raags=None):
     """Loads and preprocesses data from the dataset directory."""
-    print(f"Loading data from: {data_path}") #change
-    logging.info(f"Loading data from: {data_path}") #change
+    print(f"Loading data from: {data_path}")
+    logging.info(f"Loading data from: {data_path}")
     all_output = []
     raag_count = 0
     
     # Check if the 'hindustani' folder exists
-    dataset_folder = os.path.join(data_path, "hindustani","hindustani") #change
-    logging.info(f"Checking for dataset folder at: {dataset_folder}") #added
-    if not os.path.exists(dataset_folder): # added
-                logging.error(f"Dataset not found in path: {dataset_folder}. There is no 'hindustani' folder inside 'hindustani'") #changed
+    dataset_folder = os.path.join(data_path, "hindustani","hindustani")
+    logging.info(f"Checking for dataset folder at: {dataset_folder}")
+    if not os.path.exists(dataset_folder):
+                logging.error(f"Dataset not found in path: {dataset_folder}. There is no 'hindustani' folder inside 'hindustani'")
                 return []
     else:
         logging.info(f"Dataset folder found: {dataset_folder}")
@@ -164,20 +165,17 @@ def extract_all_notes(all_output, min_notes=100):
     """Extracts all notes from the preprocessed data."""
     logging.info("Extracting all notes...")
     all_notes = []
-    all_output_filtered = [] #added array
+    all_output_filtered = []
     for data_point in all_output:
-        notes = data_point.get('notes')
-        if notes is None:
-            logging.warning(f"No notes found for {data_point.get('raag')}. Skipping.")
-            continue
-        if len(notes) > min_notes: # added filter
-            all_notes.extend(notes) #modified
-            all_output_filtered.append(data_point) # added save data point
-        else: #added if less than min_notes
-            logging.warning(f"Skipping raag {data_point.get('raag')} because it has less than {min_notes} notes.")#added
-            continue # added
+        if len(data_point.get('notes', [])) >= min_notes:
+            all_notes.extend(data_point['notes'])  # Use .get('notes', []) to safely handle missing keys
+            all_output_filtered.append(data_point)
+        else:
+            logging.warning(f"Skipping raag {data_point.get('raag')} because it has less than {min_notes} notes.")
+            
     logging.info(f"Total number of notes found: {len(all_notes)}")
-    return all_notes, all_output_filtered # changed
+    logging.info(f"Number of filtered raags: {len(all_output_filtered)}")
+    return all_notes, all_output_filtered
 
 def create_tokenizer(all_notes):
     """Creates a tokenizer based on the unique notes."""
@@ -185,15 +183,15 @@ def create_tokenizer(all_notes):
         logging.error("No notes provided to create a tokenizer. Aborting.")
         return None
 
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(filters='', lower=False, oov_token="<unk>")  # Removed filters and set lower=False
-    tokenizer.fit_on_texts(all_notes) # modified
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(filters='', lower=False, oov_token="<unk>")
+    tokenizer.fit_on_texts(all_notes)
     return tokenizer
 
 def tokenize_all_notes(tokenizer, all_notes):
     """Tokenizes all notes using the provided tokenizer."""
     logging.info("Tokenizing all notes...")
     tokenized_notes = tokenizer.texts_to_sequences(all_notes)
-    return tokenized_notes
+    return [item for sublist in tokenized_notes for item in sublist]
 
 def tokenize_sequence(tokenizer, sequence):
     """Tokenizes a sequence of notes using the provided tokenizer."""
@@ -201,46 +199,68 @@ def tokenize_sequence(tokenizer, sequence):
     return tokenized_sequence[0]  # Return the first (and only) list of tokenized sequences
 
 def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
-    """Creates sequences from tokenized notes, batching and adding raag labels."""
+    """Creates sequences and labels for model training using tf.data.Dataset."""
     logging.info("Creating sequences...")
-    sequences_with_labels = []
 
-    logging.debug(f"Number of tokenized notes: {len(tokenized_notes)}")
-    logging.debug(f"Number of raag labels: {len(raag_labels)}")
-
-    for i, seq in enumerate(tokenized_notes):
-        logging.debug(f"Processing tokenized note {i} with length {len(seq)}")
-        if len(seq) < sequence_length + 1:
-            logging.debug(f"Skipping sequence {i} because it is too short (length: {len(seq)})")
-            continue
-        for j in range(len(seq) - sequence_length):
-            input_sequence = seq[j:j + sequence_length]
-            if len(raag_labels) > j + sequence_length:
-                target_raag_id = raag_labels[j]
-                sequences_with_labels.append((input_sequence, target_raag_id, seq[j + sequence_length]))
-            else:
-                logging.warning(f"Not enough labels for sequence {j} in tokenized note {i}. Skipping.")
-
-    if not sequences_with_labels:
+    # Check if tokenized_notes is empty or if sequence_length is invalid
+    if not tokenized_notes or sequence_length <= 0:
         logging.warning("No sequences created. Check your input data and parameters.")
-        # Return an empty dataset
-        return tf.data.Dataset.from_tensor_slices((tf.constant([]), tf.constant([]))).batch(batch_size)
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
 
-    np.random.shuffle(sequences_with_labels)
-    features, raag_ids, targets = zip(*sequences_with_labels)
-    features_padded = tf.keras.preprocessing.sequence.pad_sequences(features)
+    # Check if sequence_length is greater than the length of tokenized_notes
+    if sequence_length >= len(tokenized_notes):
+        logging.warning("Sequence length is greater than or equal to the length of tokenized_notes.")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
 
-    features_tensor = tf.convert_to_tensor(features_padded, dtype=tf.int32)
-    targets_tensor = tf.convert_to_tensor(targets, dtype=tf.int32)
-    raag_ids_tensor = tf.convert_to_tensor(raag_ids, dtype=tf.int32)
+    # Check if there are enough raag labels
+    if len(raag_labels) < len(tokenized_notes) - sequence_length:
+        logging.warning("Not enough raag labels to create sequences.")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
 
-    dataset = tf.data.Dataset.from_tensor_slices(((features_tensor, raag_ids_tensor), targets_tensor))
+    # Check batch size
+    if batch_size <= 0:
+        logging.warning("Batch size is invalid")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
+    
+    #initialize the lists
+    sequences = []
+    next_notes = []
+    raag_ids = []
+    for i in range(len(tokenized_notes) - sequence_length):
+        seq_in = tokenized_notes[i:i + sequence_length]
+        seq_out = tokenized_notes[i + sequence_length]
+        sequences.append(seq_in)
+        next_notes.append(seq_out)
+        raag_ids.append(raag_labels[i])
+
+    logging.info(f"Sequences created: {len(sequences)}")
+    logging.info(f"Next notes created: {len(next_notes)}")
+    logging.info(f"Raag ids created: {len(raag_ids)}")
+
+    # Check if the number of raag IDs matches the number of sequences
+    if len(raag_ids) != len(sequences):
+        logging.warning(f"The number of raag IDs ({len(raag_ids)}) does not match the number of sequences ({len(sequences)}).")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
+
+    # Convert to numpy arrays
+    sequences = np.array(sequences)
+    next_notes = np.array(next_notes)
+    raag_ids = np.array(raag_ids)
+
+    # Logging to check if data is being created
+    logging.debug(f"Shape of sequences: {sequences.shape}")
+    logging.debug(f"Shape of next_notes: {next_notes.shape}")
+    logging.debug(f"Shape of raag_ids: {raag_ids.shape}")
+
+    # Create tf.data.Dataset
+    dataset = tf.data.Dataset.from_tensor_slices(((sequences, raag_ids), next_notes))
     dataset = dataset.batch(batch_size)
+    logging.info(f"Dataset created with batch size: {batch_size}")
+    logging.info("Sequences created successfully")
 
-    logging.info(f"Total number of sequences created: {len(sequences_with_labels)}")
     return dataset
 
-def split_into_features_and_target_raag(sequence, raag_id): #modified
+def split_into_features_and_target_raag(sequence, raag_id):
     """Splits a sequence into features and target, and returns the raag ID."""
     input_sequence = sequence[:-1]  # All but the last element
     target = sequence[-1]  # Last element is the target
@@ -262,21 +282,25 @@ def create_raag_id_mapping(all_output):
     logging.info(f"Total unique raags found: {len(raag_id_dict)}")
     return raag_id_dict, len(raag_id_dict)
 
-def generate_raag_labels(all_output, raag_id_dict, num_raags):
-    """Generates raag labels for each sequence based on the raag ID mapping."""
+def generate_raag_labels(all_output_filtered, raag_id_dict, num_raags):
+    """Generates raag labels for the entire dataset."""
     logging.info("Generating raag labels...")
-    all_raag_labels = []
+    start_time = time.time()  # Start timer
+    raag_labels = []
+    for entry in all_output_filtered:
+        raag_id = raag_id_dict.get(entry['raag'], -1)  # Get raag ID from the dictionary, default to -1 if not found
+        if raag_id != -1:
+            raag_labels.extend([raag_id] * len(entry['notes']))  # Assign raag ID to all notes in the entry
+        else:
+             logging.warning(f"Raag not found in raag_id_dict: {entry['raag']}. This raag will be ignored")
+            
+    if len(raag_labels) < (len(all_notes) - sequence_length):
+        logging.warning(f"The length of raag_labels ({len(raag_labels)}) is less than the length of tokenized_notes - sequence_length ({len(all_notes) - sequence_length}).")
     
-    for data_point in all_output:
-        raag_name = data_point['raag']
-        raag_id = raag_id_dict.get(raag_name)
-        if raag_id is None:
-            logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
-            continue
+    if not raag_labels:
+        logging.error("No valid raag labels were generated. Please check your data.")
 
-        notes_count = len(data_point.get('notes'))
-        raag_labels = [raag_id] * notes_count
-        all_raag_labels.extend(raag_labels)
-
-    logging.info(f"Total raag labels generated: {len(all_raag_labels)}")
-    return all_raag_labels
+    end_time = time.time()  # End timer
+    logging.info(f"Total raag labels generated: {len(raag_labels)}")
+    logging.info(f"Raag labels generated in {end_time - start_time:.2f} seconds")
+    return raag_labels
