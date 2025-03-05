@@ -13,11 +13,14 @@ class RaagConditioning(Layer):
         self.sequence_length = sequence_length
         self.embedding_dim = embedding_dim  # Store embedding_dim
 
-    def call(self, raag_embeddings):
+    def call(self, raag_embeddings, training=None):
         # Look up the embedding for the raag ID
         raag_embed = self.raag_embedding(raag_embeddings)
-        # Tile the raag embedding to match the sequence length
-        return tf.tile(raag_embed, [1, self.sequence_length, 1])
+        if training:
+            return raag_embed
+        else:
+            # Tile the raag embedding to match the sequence length
+            return tf.tile(raag_embed, [1, self.sequence_length, 1])
 
 class TransformerEncoderLayer(Layer):
     def __init__(self, embedding_dim, num_heads, ff_dim, rate=0.1):
@@ -63,12 +66,18 @@ class MusicTransformer(Model):
        """
         sequence_input, raag_input = inputs
         #embedding
-        x = self.embedding(sequence_input)
+        if training:
+            x = self.embedding(sequence_input)
+        else:
+             x = self.embedding(sequence_input)
         x = self.dropout(x, training=training)
         #Raag conditioning.
-        raag_embeddings = self.raag_conditioning(raag_input)  # Call RaagConditioning to get raag embeddings
+        raag_embeddings = self.raag_conditioning(raag_input, training=training)  # Call RaagConditioning to get raag embeddings
         # Concatenate sequence embeddings and raag embeddings
-        x = tf.concat([x, raag_embeddings], axis=-1)
+        if training:
+            x = tf.concat([x, raag_embeddings], axis=-1)
+        else:
+             x = tf.concat([x, raag_embeddings], axis=-1)
         #encoder
         x = self.encoder_layer(x, training)
         x = self.dropout(x, training=training)
@@ -79,7 +88,7 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
     """Creates the MusicTransformer model."""
     logging.info("Creating model...")
     with strategy.scope():
-        input_sequence = Input(shape=(sequence_length,))
+        input_sequence = Input(shape=(None,))
         input_raag = Input(shape=(1,)) #added input raag
         music_transformer = MusicTransformer(vocab_size, num_raags, sequence_length)
         output = music_transformer((input_sequence, input_raag)) #modified
