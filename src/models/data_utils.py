@@ -205,30 +205,37 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences from tokenized notes, batching and adding raag labels."""
     logging.info("Creating sequences...")
     sequences_with_labels = []
-    for i, seq in enumerate(tokenized_notes): #changed
-        if len(seq) < sequence_length + 1:  # Add +1 to account for the target note
-          continue
-        for j in range(0, len(seq) - sequence_length):
-            input_sequence = seq[j:j+sequence_length]
-            # Check if raag_labels has enough labels
-            if len(raag_labels) > j: # changed
-              target_raag_id = raag_labels[j]  # Get raag_id from raag_labels
-              sequences_with_labels.append((input_sequence, target_raag_id, seq[j+sequence_length]))
+    
+    logging.debug(f"Number of tokenized notes: {len(tokenized_notes)}")
+    logging.debug(f"Number of raag labels: {len(raag_labels)}")
+    
+    for i, seq in enumerate(tokenized_notes):
+        if len(seq) < sequence_length + 1:
+            logging.debug(f"Skipping sequence {i} because it is too short (length: {len(seq)})")
+            continue
+        for j in range(len(seq) - sequence_length):
+            input_sequence = seq[j:j + sequence_length]
+            if len(raag_labels) > j:
+                target_raag_id = raag_labels[j]
+                sequences_with_labels.append((input_sequence, target_raag_id, seq[j + sequence_length]))
             else:
-              logging.warning(f"Not enough labels for sequence {j}. Skipping.") #changed j for i
+                logging.warning(f"Not enough labels for sequence {j} in tokenized note {i}. Skipping.")
+    
+    if not sequences_with_labels:
+        logging.warning("No sequences created. Check your input data and parameters.")
+        return tf.data.Dataset.from_tensor_slices(([], [], []))
 
-    # Shuffle and batch the data
     np.random.shuffle(sequences_with_labels)
-    features, raag_ids, targets = zip(*sequences_with_labels) #modified
-    features_padded = tf.keras.preprocessing.sequence.pad_sequences(features)  # Pad the sequences
-    # Convert to tensors
+    features, raag_ids, targets = zip(*sequences_with_labels)
+    features_padded = tf.keras.preprocessing.sequence.pad_sequences(features)
+    
     features_tensor = tf.convert_to_tensor(features_padded, dtype=tf.int32)
     targets_tensor = tf.convert_to_tensor(targets, dtype=tf.int32)
     raag_ids_tensor = tf.convert_to_tensor(raag_ids, dtype=tf.int32)
     
-    dataset = tf.data.Dataset.from_tensor_slices(((features_tensor, raag_ids_tensor), targets_tensor)) #modified
-    dataset = dataset.batch(batch_size) #modified
-
+    dataset = tf.data.Dataset.from_tensor_slices(((features_tensor, raag_ids_tensor), targets_tensor))
+    dataset = dataset.batch(batch_size)
+    
     logging.info(f"Total number of sequences created: {len(sequences_with_labels)}")
     return dataset
 
@@ -254,23 +261,21 @@ def create_raag_id_mapping(all_output):
     logging.info(f"Total unique raags found: {len(raag_id_dict)}")
     return raag_id_dict, len(raag_id_dict)
 
-def generate_raag_labels(all_output, raag_id_dict, num_raags): #added
+def generate_raag_labels(all_output, raag_id_dict, num_raags):
     """Generates raag labels for each sequence based on the raag ID mapping."""
     logging.info("Generating raag labels...")
     all_raag_labels = []
     
     for data_point in all_output:
-        raag_name = data_point['raag']  # Corrected: Access 'raag' directly
-        
-        # Correctly look up the raag_id
+        raag_name = data_point['raag']
         raag_id = raag_id_dict.get(raag_name)
         if raag_id is None:
             logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Skipping.")
             continue
 
-        notes_count = len(data_point.get('notes')) # Get the number of notes in the data point
-        raag_labels = [raag_id] * notes_count  # Create a list of raag_id repeated for each note
-        all_raag_labels.extend(raag_labels)# modified
+        notes_count = len(data_point.get('notes'))
+        raag_labels = [raag_id] * notes_count
+        all_raag_labels.extend(raag_labels)
 
     logging.info(f"Total raag labels generated: {len(all_raag_labels)}")
     return all_raag_labels
