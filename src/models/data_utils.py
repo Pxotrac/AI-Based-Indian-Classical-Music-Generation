@@ -204,17 +204,21 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences from tokenized notes, batching and adding raag labels."""
     logging.info("Creating sequences...")
     sequences_with_labels = []
-    for i, seq in enumerate(tokenized_notes): #changed
+    overall_note_index = 0  # Add an index to keep track of the overall position in raag_labels
+    for seq in tokenized_notes: #changed
         if len(seq) < sequence_length + 1:  # Add +1 to account for the target note
+          overall_note_index += len(seq) #added
           continue
         for j in range(0, len(seq) - sequence_length):
             input_sequence = seq[j:j+sequence_length]
-            # Check if raag_labels has enough labels
-            if len(raag_labels) > j: # changed
-              target_raag_id = raag_labels[j]  # Get raag_id from raag_labels
+            
+            if overall_note_index+j < len(raag_labels): # check if the index is within the labels
+              target_raag_id = raag_labels[overall_note_index+j]  # Get raag_id from raag_labels
               sequences_with_labels.append((input_sequence, target_raag_id, seq[j+sequence_length]))
             else:
-              logging.warning(f"Not enough labels for sequence {i}. Skipping.")
+              logging.warning(f"Not enough labels for index {overall_note_index+j}. Skipping.")
+
+        overall_note_index += len(seq) # added
 
     # Shuffle and batch the data
     np.random.shuffle(sequences_with_labels)
