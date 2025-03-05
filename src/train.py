@@ -105,6 +105,11 @@ def main():
 
     # Tokenize all notes
     tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
+    logging.debug(f"Number of tokenized_notes: {len(tokenized_notes)}")  # Debug log
+    if tokenized_notes:
+        logging.debug(f"First tokenized note: {tokenized_notes[0]}")  # Debug log
+    else:
+        logging.warning("tokenized_notes is empty.")  # Debug log
 
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)

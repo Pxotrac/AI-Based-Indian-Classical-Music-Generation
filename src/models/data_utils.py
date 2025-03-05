@@ -204,10 +204,10 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences from tokenized notes, batching and adding raag labels."""
     logging.info("Creating sequences...")
     sequences_with_labels = []
-    
+
     logging.debug(f"Number of tokenized notes: {len(tokenized_notes)}")
     logging.debug(f"Number of raag labels: {len(raag_labels)}")
-    
+
     for i, seq in enumerate(tokenized_notes):
         logging.debug(f"Processing tokenized note {i} with length {len(seq)}")
         if len(seq) < sequence_length + 1:
@@ -220,22 +220,22 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
                 sequences_with_labels.append((input_sequence, target_raag_id, seq[j + sequence_length]))
             else:
                 logging.warning(f"Not enough labels for sequence {j} in tokenized note {i}. Skipping.")
-    
+
     if not sequences_with_labels:
         logging.warning("No sequences created. Check your input data and parameters.")
-        return tf.data.Dataset.from_tensor_slices(([], [], []))
+        return tf.data.Dataset.from_tensor_slices((tf.constant([]), tf.constant([]), tf.constant([]))).batch(batch_size)
 
     np.random.shuffle(sequences_with_labels)
     features, raag_ids, targets = zip(*sequences_with_labels)
     features_padded = tf.keras.preprocessing.sequence.pad_sequences(features)
-    
+
     features_tensor = tf.convert_to_tensor(features_padded, dtype=tf.int32)
     targets_tensor = tf.convert_to_tensor(targets, dtype=tf.int32)
     raag_ids_tensor = tf.convert_to_tensor(raag_ids, dtype=tf.int32)
-    
+
     dataset = tf.data.Dataset.from_tensor_slices(((features_tensor, raag_ids_tensor), targets_tensor))
     dataset = dataset.batch(batch_size)
-    
+
     logging.info(f"Total number of sequences created: {len(sequences_with_labels)}")
     return dataset
 
