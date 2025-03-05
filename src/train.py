@@ -33,24 +33,20 @@ print("REPLICAS: ", strategy.num_replicas_in_sync)
 def main():
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
+        data_path = "/content/drive/MyDrive/"  # correct path
+        print(f"Running on Colab. repo_dir: {repo_dir}")
+        print(f"Running on Colab. data_path: {data_path}")
     else:
         repo_dir = os.path.dirname(os.path.abspath(__file__))
         repo_dir = os.path.dirname(repo_dir)  # Go up one more level
+        data_path = os.path.dirname(repo_dir)
+        print(f"Running locally. repo_dir: {repo_dir}")
+        print(f"Running locally. data_path: {data_path}")
 
     # Load Config - Now always load config.yaml with absolute path
     config_file = os.path.join(repo_dir, "config.yaml")  # Use absolute path
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
-    
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-        repo_dir = "/content/drive/MyDrive/music_generation_repo"
-        data_path = "/content/drive/MyDrive/"  #correct path
-        print(f"Running on Colab. repo_dir: {repo_dir}")
-        print(f"Running on Colab. data_path: {data_path}")
-    else:
-        data_path = os.path.dirname(repo_dir)
-        print(f"Running locally. repo_dir: {repo_dir}")
-        print(f"Running locally. data_path: {data_path}")
 
     sequence_length = config['sequence_length']
     epochs = config['epochs']
@@ -65,22 +61,24 @@ def main():
     start_time = time.time()  # Start timer
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path) #change
+    all_output = load_and_preprocess_data(repo_dir, data_path)  # change
     logging.info("Data loaded.")
+    if all_output is None or len(all_output) == 0:
+        logging.error("No data was loaded. Check the data. Aborting")
+        return
 
     # Extract all notes
-    all_notes = extract_all_notes(all_output)  # Function to extract all notes from all_output
-    all_notes_flatten = [item for sublist in all_notes for item in sublist]
-    if len(all_notes_flatten) == 0:
-       logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
-       return #now the return is inside the function
+    all_notes, all_output_filtered = extract_all_notes(all_output)  # Function to extract all notes from all_output
+    if len(all_notes) == 0:
+        logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
+        return  # now the return is inside the function
 
     # Tokenization and vocabulary creation
-    tokenizer = create_tokenizer(all_notes_flatten)
+    tokenizer = create_tokenizer(all_notes) #modified
     if tokenizer is None:
         logging.error("Tokenizer was not created. Check preprocessing. Aborting")
         return
-    
+
     if len(tokenizer.word_index) < 2:
         logging.error("Tokenizer created a vocabulary with less than 2 words. Check your notes data. Aborting.")
         return
@@ -90,28 +88,28 @@ def main():
     if vocab_size <= 1:
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
         return  # Stop execution if vocab size is too small
-    
+
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(all_output)  # Create mapping from processed data
+    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)  #modified
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
     if num_raags == 0:
-      logging.error("No raags were found. Please check your data.")
-      return
+        logging.error("No raags were found. Please check your data.")
+        return
 
     # Generate raag labels
     logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output, raag_id_dict, num_raags)  # Generate labels from processed data
+    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags)  #modified
     logging.info("Raag labels generated")
-    
+
     # Tokenize all notes
     tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
-    
+
     # Create sequences using tf.data.Dataset
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
-    
+
     end_time = time.time()  # End timer
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
@@ -125,7 +123,7 @@ def main():
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
 
-         # Model Checkpoint
+        # Model Checkpoint
         checkpoint_filepath = os.path.join(repo_dir, "checkpoints", f"{model_name}.h5")
         model_checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_filepath,
@@ -176,8 +174,8 @@ def main():
         plt.title('Training and Validation Loss')
 
         plt.tight_layout()
-        os.makedirs(os.path.join(repo_dir,"plots"), exist_ok=True) # create the path if it doesn't exist
-        plt.savefig(os.path.join(repo_dir,"plots", f"{model_name}_training_history.png"))
+        os.makedirs(os.path.join(repo_dir, "plots"), exist_ok=True)  # create the path if it doesn't exist
+        plt.savefig(os.path.join(repo_dir, "plots", f"{model_name}_training_history.png"))
         logging.info("Training history plot saved.")
 
 if __name__ == "__main__":
