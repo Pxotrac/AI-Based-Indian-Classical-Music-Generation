@@ -46,7 +46,7 @@ class MusicTransformer(Model):
         super(MusicTransformer, self).__init__()
         self.embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim)
         self.raag_conditioning = RaagConditioning(num_raags, embedding_dim, sequence_length)
-        self.encoder_layer = TransformerEncoderLayer(embedding_dim, num_heads, ff_dim, rate)
+        self.encoder_layer = TransformerEncoderLayer(embedding_dim*2, num_heads, ff_dim, rate) # Correct embedding_dim
         self.dropout = Dropout(rate)
         self.dense = Dense(vocab_size, activation='softmax')
         self.sequence_length = sequence_length
