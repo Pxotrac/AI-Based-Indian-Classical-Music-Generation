@@ -77,6 +77,8 @@ class MusicTransformer(Model):
         # Concatenate sequence embeddings and raag embeddings
         if training:
             x = tf.concat([x, raag_embeddings], axis=-1)
+            # Reshape x to add a sequence length of 1.
+            x = tf.expand_dims(x, axis=1)
         else:
              x = tf.concat([x, raag_embeddings], axis=-1)
         #encoder
