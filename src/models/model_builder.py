@@ -23,7 +23,7 @@ class TransformerEncoderLayer(Layer):
         super(TransformerEncoderLayer, self).__init__()
         self.mha = MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
         self.ffn = tf.keras.Sequential(
-            [Dense(ff_dim, activation="relu"), Dense(embedding_dim),]
+            [Dense(ff_dim, activation="relu"), Dense(embedding_dim),] # now it is embedding_dim
         )
         self.layernorm1 = LayerNormalization(epsilon=1e-6)
         self.layernorm2 = LayerNormalization(epsilon=1e-6)
