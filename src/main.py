@@ -112,7 +112,7 @@ def main():
 
     # Generate raag labels
     logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags) #added filtered raag
+    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length) #added filtered raag
     logging.info("Raag labels generated")
 
     # Tokenize all notes

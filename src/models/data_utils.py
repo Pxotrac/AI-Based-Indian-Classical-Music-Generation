@@ -282,7 +282,7 @@ def create_raag_id_mapping(all_output):
     logging.info(f"Total unique raags found: {len(raag_id_dict)}")
     return raag_id_dict, len(raag_id_dict)
 
-def generate_raag_labels(all_output_filtered, raag_id_dict, num_raags):
+def generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length):
     """Generates raag labels for the entire dataset."""
     logging.info("Generating raag labels...")
     start_time = time.time()  # Start timer

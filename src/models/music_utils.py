@@ -8,11 +8,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, top_k=40, token_frequencies=None, vocab_size=None, sequence_length=None, strategy=None):
     """Generates music using top-k sampling and token frequency balancing."""
 
-    # Check if vocab_size and sequence_length are provided
-    if vocab_size is None or sequence_length is None:
-        logging.error("vocab_size and sequence_length must be provided to generate_music")
-        return []
-
     generated_sequence = seed_sequence.copy()
     for _ in range(max_length - len(seed_sequence)):
         input_sequence = np.array([generated_sequence[-sequence_length:]])
@@ -46,10 +41,6 @@ def generate_music(model, seed_sequence, raag_id, max_length, temperature=1.0, t
 
 def generate_raag_music(model, raag_id, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, tonic_hz=440, strategy=None, vocab_size=None, sequence_length=None):
     """Generates music for a specific raag, potentially adjusting tonic frequency."""
-    # Check if vocab_size and sequence_length are provided
-    if vocab_size is None or sequence_length is None:
-        logging.error("vocab_size and sequence_length must be provided to generate_raag_music")
-        return []
 
     tonic_frequencies = {
         0: 349.23,  # Raag Bahar
@@ -174,11 +165,6 @@ def generate_music_with_tonic(model, seed_sequence, raag_id, tokenizer, max_leng
     logging.info("Generating music with raag-specific tonic...")
     # Initialize generated_sequence here!
     generated_sequence = seed_sequence.copy()
-
-    # Check if vocab_size and sequence_length are provided
-    if vocab_size is None or sequence_length is None:
-        logging.error("vocab_size and sequence_length must be provided to generate_music_with_tonic")
-        return []
 
     midi_mapping = {}
     current_time = 0

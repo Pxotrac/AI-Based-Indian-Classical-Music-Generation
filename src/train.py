@@ -91,7 +91,7 @@ def main():
 
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)  #modified
+    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
     if num_raags == 0:
@@ -100,7 +100,7 @@ def main():
 
     # Generate raag labels
     logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags)  #modified
+    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length)
     logging.info("Raag labels generated")
 
     # Tokenize all notes
