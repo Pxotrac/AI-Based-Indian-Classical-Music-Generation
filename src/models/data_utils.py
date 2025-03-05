@@ -210,61 +210,32 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     if not tokenized_notes or sequence_length <= 0:
         logging.warning("No sequences created. Check your input data and parameters.")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
-
     # Check if sequence_length is greater than the length of tokenized_notes
     if sequence_length >= len(tokenized_notes):
         logging.warning("Sequence length is greater than or equal to the length of tokenized_notes.")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
-
     # Check if there are enough raag labels
     if len(raag_labels) < len(tokenized_notes) - sequence_length:
         logging.warning("Not enough raag labels to create sequences.")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
-
     # Check batch size
     if batch_size <= 0:
         logging.warning("Batch size is invalid")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
+    logging.info("Creating dataset...")
     
-    #initialize the lists
-    sequences = []
-    next_notes = []
-    raag_ids = []
-    for i in range(len(tokenized_notes) - sequence_length):
-        seq_in = tokenized_notes[i:i + sequence_length]
-        seq_out = tokenized_notes[i + sequence_length]
-        sequences.append(seq_in)
-        next_notes.append(seq_out)
-        raag_ids.append(raag_labels[i])
+    # Convert to TensorFlow tensors
+    tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
+    raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
+    
+    # Create sequences and next_notes
+    sequences_dataset = tf.data.Dataset.from_tensor_slices(((tokenized_notes_tensor[:-sequence_length],raag_labels_tensor[sequence_length:]),tokenized_notes_tensor[sequence_length:]))
+    sequences_dataset = sequences_dataset.batch(batch_size)
+    end_time = time.time()
+    logging.info(f"Dataset created in: {end_time - start_time:.2f} seconds")
+    logging.info(f"Dataset elements: {tf.data.experimental.cardinality(sequences_dataset)}")
 
-    logging.info(f"Sequences created: {len(sequences)}") # added logging
-    logging.info(f"Next notes created: {len(next_notes)}")
-    logging.info(f"Raag ids created: {len(raag_ids)}")
-
-    # Check if the number of raag IDs matches the number of sequences
-    if len(raag_ids) != len(sequences):
-        logging.warning(f"The number of raag IDs ({len(raag_ids)}) does not match the number of sequences ({len(sequences)}).")
-        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
-
-    # Convert to numpy arrays
-    sequences = np.array(sequences)
-    next_notes = np.array(next_notes)
-    raag_ids = np.array(raag_ids)
-
-    # Logging to check if data is being created
-    logging.debug(f"Shape of sequences: {sequences.shape}")
-    logging.debug(f"Shape of next_notes: {next_notes.shape}")
-    logging.debug(f"Shape of raag_ids: {raag_ids.shape}")
-
-    # Create tf.data.Dataset
-    dataset = tf.data.Dataset.from_tensor_slices(((sequences, raag_ids), next_notes))
-    dataset = dataset.batch(batch_size)
-    logging.info(f"Dataset created with batch size: {batch_size}")
-    logging.info("Sequences created successfully") #added
-    end_time = time.time()  # End timer
-    logging.info(f"create_sequences took {end_time - start_time:.2f} seconds")
-
-    return dataset
+    return sequences_dataset
 
 def split_into_features_and_target_raag(sequence, raag_id):
     """Splits a sequence into features and target, and returns the raag ID."""
