@@ -1,118 +1,84 @@
 import tensorflow as tf
-from tensorflow.keras import optimizers
-from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout, Input, concatenate, LayerNormalization
+from tensorflow.keras.layers import Input, Embedding, MultiHeadAttention, LayerNormalization, Dense, Dropout, Layer
 from tensorflow.keras.models import Model
+import logging
+import numpy as np
 
-class MultiHeadAttention(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads):
-        super().__init__()
-        self.num_heads = num_heads
-        self.d_model = d_model
-        self.depth = d_model // num_heads
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-        self.wq = tf.keras.layers.Dense(d_model)
-        self.wk = tf.keras.layers.Dense(d_model)
-        self.wv = tf.keras.layers.Dense(d_model)
-        self.dense = tf.keras.layers.Dense(d_model)
+class RaagConditioning(Layer):
+    def __init__(self, num_raags, embedding_dim, sequence_length):
+        super(RaagConditioning, self).__init__()
+        self.raag_embedding = Embedding(input_dim=num_raags, output_dim=embedding_dim)
+        self.sequence_length = sequence_length
 
-    def split_heads(self, x, batch_size):
-        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
-        return tf.transpose(x, perm=[0, 2, 1, 3])
+    def call(self, raag_embeddings):
+        # Look up the embedding for the raag ID
+        raag_embed = self.raag_embedding(raag_embeddings)
+        # Tile the raag embedding to match the sequence length
+        return tf.tile(raag_embed, [1, self.sequence_length, 1]) # now it is correct
 
-    def call(self, v, k, q):
-        batch_size = tf.shape(q)[0]
-        q = self.wq(q)
-        k = self.wk(k)
-        v = self.wv(v)
-
-        q = self.split_heads(q, batch_size)
-        k = self.split_heads(k, batch_size)
-        v = self.split_heads(v, batch_size)
-
-        scaled_attention = tf.nn.softmax(
-            (tf.matmul(q, k, transpose_b=True)) / tf.math.sqrt(tf.cast(self.depth, tf.float32))
+class TransformerEncoderLayer(Layer):
+    def __init__(self, embedding_dim, num_heads, ff_dim, rate=0.1):
+        super(TransformerEncoderLayer, self).__init__()
+        self.mha = MultiHeadAttention(num_heads=num_heads, key_dim=embedding_dim)
+        self.ffn = tf.keras.Sequential(
+            [Dense(ff_dim, activation="relu"), Dense(embedding_dim),]
         )
-        output = tf.matmul(scaled_attention, v)
-        output = tf.transpose(output, perm=[0, 2, 1, 3])
-        output = tf.reshape(output, (batch_size, -1, self.d_model))
-        return self.dense(output)
-
-class TransformerBlock(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads, **kwargs):  # Add **kwargs
-        super().__init__(**kwargs)  # Pass **kwargs to super().__init__
-        self.attn = MultiHeadAttention(d_model, num_heads)
-        self.ffn = tf.keras.Sequential([
-            tf.keras.layers.Dense(d_model, activation='relu'),
-            tf.keras.layers.Dense(d_model)
-        ])
         self.layernorm1 = LayerNormalization(epsilon=1e-6)
         self.layernorm2 = LayerNormalization(epsilon=1e-6)
+        self.dropout1 = Dropout(rate)
+        self.dropout2 = Dropout(rate)
 
     def call(self, inputs, training):
-        attn_output = self.attn(inputs, inputs, inputs)  # Self-attention
+        attn_output = self.mha(inputs, inputs, inputs)
+        attn_output = self.dropout1(attn_output, training=training)
         out1 = self.layernorm1(inputs + attn_output)
         ffn_output = self.ffn(out1)
+        ffn_output = self.dropout2(ffn_output, training=training)
         return self.layernorm2(out1 + ffn_output)
 
-class RaagConditioning(tf.keras.layers.Layer):
-    def __init__(self, sequence_length, embedding_dim, **kwargs):  # Add **kwargs
-        super().__init__(**kwargs)
+class MusicTransformer(Model):
+    def __init__(self, vocab_size, num_raags, sequence_length, embedding_dim=256, num_heads=4, ff_dim=512, rate=0.1, strategy=None):
+        super(MusicTransformer, self).__init__()
+        self.embedding = Embedding(input_dim=vocab_size, output_dim=embedding_dim)
+        self.raag_conditioning = RaagConditioning(num_raags, embedding_dim, sequence_length)
+        self.encoder_layer = TransformerEncoderLayer(embedding_dim, num_heads, ff_dim, rate)
+        self.dropout = Dropout(rate)
+        self.dense = Dense(vocab_size, activation='softmax')
         self.sequence_length = sequence_length
-        self.embedding_dim = embedding_dim
-
-    def call(self, raag_embed): #modified
-        return tf.tile(raag_embed, [1, self.sequence_length, 1])
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], self.sequence_length, input_shape[2])
-
-# Music Transformer Model ------------------------------------------------------
-class MusicTransformer(tf.keras.Model):
-    def __init__(self, num_notes, embedding_dim, num_heads, num_layers, sequence_length, raag_vocab_size, **kwargs):
-        super().__init__(**kwargs)
-        self.embedding_layer = tf.keras.layers.Embedding(num_notes, embedding_dim)
-        self.raag_embedding_layer = tf.keras.layers.Embedding(raag_vocab_size, embedding_dim) 
-        self.transformer_blocks = [TransformerBlock(embedding_dim, num_heads) for _ in range(num_layers)]
-        self.dense_layer = tf.keras.layers.Dense(num_notes)  
-        self.raag_conditioning = RaagConditioning(sequence_length, embedding_dim)  
-
-    def call(self, inputs, training=False):  #modified call method
-        notes_input, raag_id = inputs
-        # Note Embedding
-        note_embeddings = self.embedding_layer(notes_input)
-
-        # Raag Embedding and Conditioning
-        raag_embeddings = self.raag_embedding_layer(raag_id)
-        #raag_embeddings = tf.squeeze(raag_embeddings, axis=1)# Removed
-        raag_embeddings = self.raag_conditioning(raag_embeddings) #modified
-
-        # Combine Embeddings 
-        x = note_embeddings + raag_embeddings  
-
-        # Transformer Blocks
-        for block in self.transformer_blocks:
-            x = block(x, training=training)  
-
-        # Output Layer
-        output = self.dense_layer(x)
-        return output
+    
+    def call(self, inputs, training):
+        """
+        Defines the forward pass of the MusicTransformer model.
+    
+        Args:
+            inputs: A tuple containing the sequence input and the raag input.
+            training: A boolean indicating whether the model is in training mode.
+        Returns:
+            The output of the model, which is a probability distribution over the vocabulary.
+        """
+        sequence_input, raag_input = inputs
+        #embedding
+        x = self.embedding(sequence_input)
+        x = self.dropout(x, training=training)
+        #Raag conditioning.
+        raag_embeddings = self.raag_conditioning(raag_input) #modified
+        # Concatenate sequence embeddings and raag embeddings
+        x = tf.concat([x, raag_embeddings], axis=-1)
+        #encoder
+        x = self.encoder_layer(x, training)
+        x = self.dropout(x, training=training)
+        #dense
+        return self.dense(x)
 
 def create_model(vocab_size, num_raags, sequence_length, strategy):
-    """Creates a music generation model with raag conditioning."""
-    embedding_dim = 256
-    num_heads = 4
-    num_layers = 2
-    # Input layers
-    notes_input = Input(shape=(None,), name='notes_input') # changed
-    raag_input = Input(shape=(1,), name='raag_input')  # Input for raag ID #modified
+    """Creates the MusicTransformer model."""
+    logging.info("Creating model...")
     with strategy.scope():
-      model = MusicTransformer(vocab_size, embedding_dim, num_heads, num_layers, sequence_length, num_raags)
-      model._name = "MusicTransformer"
-
-      # Compile the model
-      optimizer = optimizers.legacy.Adam(learning_rate=0.001)  # Adjust learning rate if needed
-      # optimizer = tf.tpu.experimental.CrossShardOptimizer(optimizer) if strategy.num_replicas_in_sync > 1 else optimizer # Wrap optimizer if using TPU strategy
-      model.compile(loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), optimizer=optimizer, metrics=['accuracy'])
-      #Now, model will call with a tuple, so we need to set it like that
-      model((notes_input, raag_input))
-    return model
+        input_sequence = Input(shape=(sequence_length,))
+        input_raag = Input(shape=(1,)) #added input raag
+        music_transformer = MusicTransformer(vocab_size, num_raags, sequence_length)
+        output = music_transformer((input_sequence, input_raag)) #modified
+        model = Model(inputs=[input_sequence, input_raag], outputs=output) #modified
+        return model
