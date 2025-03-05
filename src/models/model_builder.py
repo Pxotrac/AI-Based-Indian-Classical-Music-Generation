@@ -17,7 +17,8 @@ class RaagConditioning(Layer):
         # Look up the embedding for the raag ID
         raag_embed = self.raag_embedding(raag_embeddings)
         if training:
-            return raag_embed
+            # Squeeze to remove the extra dimension.
+            return tf.squeeze(raag_embed, axis=1)
         else:
             # Tile the raag embedding to match the sequence length
             return tf.tile(raag_embed, [1, self.sequence_length, 1])
