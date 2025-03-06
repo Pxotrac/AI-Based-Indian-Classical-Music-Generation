@@ -218,6 +218,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences and labels for model training using tf.data.Dataset."""
     logging.info("Creating sequences...")
     start_time = time.time()
+
     # Check if tokenized_notes is empty or if sequence_length is invalid
     if not tokenized_notes or sequence_length <= 0:
         logging.warning("No sequences created. Check your input data and parameters.")
@@ -227,7 +228,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
         logging.warning("Sequence length is greater than or equal to the length of tokenized_notes.")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
     # Check if there are enough raag labels
-    if len(raag_labels) < len(tokenized_notes) - sequence_length:
+    if len(raag_labels) < len(tokenized_notes):
         logging.warning("Not enough raag labels to create sequences.")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
     # Check batch size
@@ -239,24 +240,21 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     # Convert to TensorFlow tensors
     tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
+
+    # Create sequences and next_notes in TensorFlow
+    dataset = tf.data.Dataset.from_tensor_slices((tokenized_notes_tensor, raag_labels_tensor))
+    dataset = dataset.window(size=sequence_length + 1, shift=1, drop_remainder=True)
     
-    # Create sequences and next_notes
-    notes_input = []
-    raag_input=[]
-    outputs = []
-    for i in range(0, len(tokenized_notes) - sequence_length, 1):
-        seq_in = tokenized_notes_tensor[i:i + sequence_length]
-        seq_out = tokenized_notes_tensor[i + sequence_length]
-        raag_label = raag_labels_tensor[i:i + sequence_length] #modified
+    def split_window(window):
+      """Split the window into features and label."""
+      notes_seq = window[:-1] # the last element is removed
+      raag_seq = window[-1] # the last element is the raag label
+      return {"notes_input":notes_seq[0], "raag_label": raag_seq[1]}, window[-1]
+    
+    dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
+    dataset = dataset.map(split_window)
+    dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
 
-        notes_input.append(seq_in)
-        raag_input.append(raag_label)
-        outputs.append(seq_out)
-
-    # Convert to TensorFlow Dataset
-    dataset = tf.data.Dataset.from_tensor_slices(({"notes_input": tf.constant(notes_input, dtype=tf.int32), "raag_label": tf.constant(raag_input, dtype=tf.int32)}, tf.constant(outputs, dtype=tf.int32)))
-    dataset = dataset.shuffle(buffer_size=1024).batch(batch_size, drop_remainder=True)
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
     end_time = time.time()
     logging.info(f"Dataset created in: {end_time - start_time:.2f} seconds")
     logging.info(f"Dataset elements: {tf.data.experimental.cardinality(dataset)}")
