@@ -238,15 +238,23 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     # Convert to TensorFlow tensors
     tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
-    
-    # Create sequences and next_notes
-    sequences_dataset = tf.data.Dataset.from_tensor_slices(((tokenized_notes_tensor[:-sequence_length],raag_labels_tensor[sequence_length:]),tokenized_notes_tensor[sequence_length:]))
-    sequences_dataset = sequences_dataset.batch(batch_size)
-    end_time = time.time()
-    logging.info(f"Dataset created in: {end_time - start_time:.2f} seconds")
-    logging.info(f"Dataset elements: {tf.data.experimental.cardinality(sequences_dataset)}")
 
-    return sequences_dataset
+    # Create sequences and next_notes
+    inputs = []
+    outputs = []
+    for i in range(0, len(tokenized_notes) - sequence_length, 1):
+        seq_in = tokenized_notes_tensor[i:i + sequence_length]
+        seq_out = tokenized_notes_tensor[i + sequence_length]
+        raag_label = raag_labels_tensor[i] #only one raag label for each sequence
+
+        inputs.append((seq_in, raag_label))
+        outputs.append(seq_out)
+
+    # Convert to TensorFlow Dataset
+    dataset = tf.data.Dataset.from_tensor_slices(({"notes_input": np.array([item[0] for item in inputs], dtype=np.int32), "raag_label": np.array([item[1] for item in inputs], dtype=np.int32)}, np.array(outputs, dtype=np.int32)))
+    dataset = dataset.shuffle(buffer_size=1024).batch(batch_size, drop_remainder=True)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    return dataset
 
 def split_into_features_and_target_raag(sequence, raag_id):
     """Splits a sequence into features and target, and returns the raag ID."""
