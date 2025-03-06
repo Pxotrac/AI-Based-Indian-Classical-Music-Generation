@@ -236,7 +236,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
         logging.warning("Batch size is invalid")
         return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
     logging.info("Creating dataset...")
-    
+
     # Convert to TensorFlow tensors
     tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
@@ -244,17 +244,16 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     # Create a dataset of indices and then use those to create the right sequences
     indices = tf.range(len(tokenized_notes_tensor) - sequence_length -1)
     dataset = tf.data.Dataset.from_tensor_slices(indices)
-    dataset = dataset.map(lambda i: (tokenized_notes_tensor[i:i+sequence_length], raag_labels_tensor[i:i+sequence_length], tokenized_notes_tensor[i + sequence_length]))
-    
-    # Split into features and labels
-    def format_features_and_labels(notes, raag_labels, target):
-        features = {
-            "notes_input": notes,
-            "raag_label": raag_labels
-        }
-        return features, target
-    
-    dataset = dataset.map(format_features_and_labels)
+
+    # Use map to create the sequences
+    def create_sequence(index):
+      notes_seq = tokenized_notes_tensor[index:index + sequence_length]
+      next_note = tokenized_notes_tensor[index + sequence_length]
+      raag_label = raag_labels_tensor[index] #only one, not a sequence
+      return {"notes_input": notes_seq, "raag_label": raag_label}, next_note
+
+    dataset = dataset.map(create_sequence)
+
     dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
     
     end_time = time.time()
