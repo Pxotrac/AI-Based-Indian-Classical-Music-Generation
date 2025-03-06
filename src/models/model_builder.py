@@ -59,13 +59,8 @@ class MusicTransformer(tf.keras.Model):
         x = self.transformer_layer(x, training=training)
         
         # Raag Conditioning
-        raag_embeddings = self.raag_embedding(raag_labels) # [batch_size, embedding_dim]
-        # Expand raag embeddings to match sequence length
-        raag_embeddings = tf.tile(tf.expand_dims(raag_embeddings, axis=1), [1, self.sequence_length, 1]) #[batch_size, sequence_length, embedding_dim]
-
-        # reshape x
-        x = tf.expand_dims(x, axis=1) # [batch_size, 1, embedding_dim]
-        x = tf.tile(x, [1, self.sequence_length, 1]) #[batch_size, sequence_length, embedding_dim]
+        raag_embeddings = self.raag_embedding(raag_labels) # [batch_size, sequence_length, embedding_dim]
+        # concatenate
         x = tf.concat([x, raag_embeddings], axis=-1)
 
         # Output Layer
@@ -197,7 +192,7 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
     with strategy.scope():
         logging.info("Creating model...")
         notes_input = tf.keras.Input(shape=(sequence_length,), name="notes_input")
-        raag_label = tf.keras.Input(shape=(1,), name="raag_label")
+        raag_label = tf.keras.Input(shape=(sequence_length,), name="raag_label") #modified
         
         transformer_output = MusicTransformer(vocab_size, num_raags, sequence_length)([notes_input, raag_label])
         # Add a Dense layer with softmax activation for the output
