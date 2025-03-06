@@ -36,7 +36,7 @@ def main():
         print(f"Running on Colab. repo_dir: {repo_dir}")
         print(f"Running on Colab. data_path: {data_path}")
     else:
-        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_path = os.path.dirname(repo_dir)
         print(f"Running locally. repo_dir: {repo_dir}")
         print(f"Running locally. data_path: {data_path}")
