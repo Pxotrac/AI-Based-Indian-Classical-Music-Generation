@@ -6,6 +6,7 @@ from collections import defaultdict
 import logging
 import pickle
 from tqdm import tqdm
+import tensorflow as tf  # <--- Add this line
 
 def load_midi_file(midi_path: str) -> pretty_midi.PrettyMIDI:
     """
@@ -229,4 +230,3 @@ def create_sequences(tokenized_notes: List[int], sequence_length: int, batch_siz
     dataset = dataset.shuffle(buffer_size=1024).batch(batch_size, drop_remainder=True)
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
     return dataset
-
