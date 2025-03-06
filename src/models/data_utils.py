@@ -245,13 +245,18 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     dataset = tf.data.Dataset.from_tensor_slices((tokenized_notes_tensor, raag_labels_tensor))
     dataset = dataset.window(size=sequence_length + 1, shift=1, drop_remainder=True)
     
-    def split_window(window):
-      """Split the window into features and label."""
-      notes_seq = window[:-1] # the last element is removed
-      raag_seq = window[-1] # the last element is the raag label
-      return {"notes_input":notes_seq[0], "raag_label": raag_seq[1]}, window[-1]
-    
-    dataset = dataset.flat_map(lambda window: window.batch(sequence_length + 1))
+    def split_window(notes_window, raag_window):
+        """Split the window into features and label."""
+        notes_seq = notes_window[:-1]
+        target_note = notes_window[-1]
+        raag_label= raag_window[:-1]
+        return {"notes_input":notes_seq, "raag_label": raag_label}, target_note
+
+    def flat_window(window_notes, window_raag):
+        """Flatten windows to create sequences."""
+        return tf.data.Dataset.zip((window_notes.batch(sequence_length+1),window_raag.batch(sequence_length+1)))
+
+    dataset = dataset.flat_map(flat_window)
     dataset = dataset.map(split_window)
     dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
 
