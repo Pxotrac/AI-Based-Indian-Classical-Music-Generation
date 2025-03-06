@@ -11,26 +11,60 @@ from models.model_builder import create_model
 from tqdm import tqdm  # Import tqdm for progress bars
 import subprocess
 import sys
+import numpy as np
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.FileHandler("main.log"), logging.StreamHandler()])
 
-# TPU Initialization
-try:
-    tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
-    print('Running on TPU ', tpu.master())
-except ValueError:
-    tpu = None
-
-if tpu:
-    tf.config.experimental_connect_to_cluster(tpu)
-    tf.tpu.experimental.initialize_tpu_system(tpu)
-    strategy = tf.distribute.TPUStrategy(tpu)
-else:
-    strategy = tf.distribute.get_strategy()  # Default strategy for CPU and single GPU
-
+# Use the default strategy for CPU and single GPU
+strategy = tf.distribute.get_strategy()
 print("REPLICAS: ", strategy.num_replicas_in_sync)
+
+def run_script_with_live_output(script_path, repo_dir):
+    """
+    Runs a script using subprocess and prints its output in real-time.
+
+    Args:
+        script_path (str): The path to the script.
+        repo_dir (str): The repository root directory.
+    """
+    logging.info(f"Running script from: {script_path}")
+    try:
+        os.chdir(os.path.join(repo_dir, "src")) #move to src folder before running
+
+        process = subprocess.Popen(
+            ["python", script_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            text=True,
+            bufsize=1,  # Line buffering
+            universal_newlines=True,
+            env={**os.environ, "COLAB_GPU": "TRUE"}
+        )
+        
+        os.chdir(repo_dir) #move back to repo_dir
+
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                break
+            print(line, end='')  # Print output to console
+            logging.info(line.strip())  # Also log the output
+
+        process.wait()  # Wait for process to finish
+        
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, process.args)
+        
+        logging.info(f"Script '{script_path}' completed successfully.")
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error running script '{script_path}': {e}")
+        return
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
+        return
 
 def main():
     logging.info("Starting main process...")
@@ -58,27 +92,10 @@ def main():
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')
     batch_size = config['batch_size']
 
-    # Run train.py using subprocess
-    train_script_path = os.path.join(repo_dir, "train.py")
+    # Run train.py using subprocess with live output
+    train_script_path = os.path.join("train.py") #we dont need the full path anymore.
     logging.info(f"Running train.py from: {train_script_path}")
-    try:
-        logging.info("Starting train.py...")
-        train_process = subprocess.run(
-            ["python", train_script_path],  # run train.py with python
-            capture_output=True,
-            text=True,
-            check=True  # Raise an exception for non-zero exit codes
-        )
-        # Log train.py's output
-        logging.info("train.py output:\n" + train_process.stdout)
-        logging.info("train.py completed successfully.")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error running train.py: {e}")
-        logging.error(f"train.py stderr:\n{e.stderr}")
-        return
-    except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
-        return
+    run_script_with_live_output(train_script_path, repo_dir)
 
 
     # Data Preprocessing

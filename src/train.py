@@ -8,25 +8,12 @@ import matplotlib.pyplot as plt
 from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
 from models.model_builder import create_model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tqdm import tqdm  # Import tqdm for progress bars
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# TPU Initialization
-try:
-    tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
-    print('Running on TPU ', tpu.master())
-except ValueError:
-    tpu = None
-
-if tpu:
-    tf.config.experimental_connect_to_cluster(tpu)
-    tf.tpu.experimental.initialize_tpu_system(tpu)
-    strategy = tf.distribute.TPUStrategy(tpu)
-else:
-    strategy = tf.distribute.get_strategy()  # Default strategy for CPU and single GPU
-
+# Use the default strategy for CPU and single GPU
+strategy = tf.distribute.get_strategy()
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
@@ -42,37 +29,37 @@ def main():
         print(f"Running locally. data_path: {data_path}")
 
     # Load Config - Now always load config.yaml with absolute path
-    config_file = os.path.join(repo_dir, "config.yaml")  # Use absolute path
+    config_file = os.path.join(repo_dir, "config.yaml")
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
 
     sequence_length = config['sequence_length']
     epochs = config['epochs']
-    batch_size = config['batch_size'] * 2
+    batch_size = config['batch_size']
     validation_split = config['validation_split']
     patience = config['patience']
-    model_name = config.get('model_name', 'my_model')  # Get model_name from config, default to 'my_model'
-    tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')  # Get tokenizer_name from config, default to 'my_tokenizer'
+    model_name = config.get('model_name', 'my_model')
+    tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
-    start_time = time.time()  # Start timer
+    start_time = time.time()
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path)  # change
+    all_output = load_and_preprocess_data(repo_dir, data_path)
     logging.info("Data loaded.")
     if all_output is None or len(all_output) == 0:
         logging.error("No data was loaded. Check the data. Aborting")
         return
 
     # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(all_output)  # Function to extract all notes from all_output
+    all_notes, all_output_filtered = extract_all_notes(all_output)
     if len(all_notes) == 0:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
-        return  # now the return is inside the function
+        return
 
     # Tokenization and vocabulary creation
-    tokenizer = create_tokenizer(all_notes) #modified
+    tokenizer = create_tokenizer(all_notes)
     if tokenizer is None:
         logging.error("Tokenizer was not created. Check preprocessing. Aborting")
         return
@@ -85,7 +72,7 @@ def main():
 
     if vocab_size <= 1:
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
-        return  # Stop execution if vocab size is too small
+        return
 
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
@@ -103,14 +90,14 @@ def main():
 
     # Tokenize all notes
     tokenized_notes = tokenize_all_notes(tokenizer, all_notes)
-    logging.debug(f"Number of tokenized_notes: {len(tokenized_notes)}")  # Debug log
+    logging.debug(f"Number of tokenized_notes: {len(tokenized_notes)}")
     if tokenized_notes:
         if len(tokenized_notes)>=10:
-            logging.debug(f"First 10 tokenized_notes: {tokenized_notes[:10]}")  # Debug log
+            logging.debug(f"First 10 tokenized_notes: {tokenized_notes[:10]}")
         
-        logging.debug(f"First tokenized note: {tokenized_notes[0]}")  # Debug log
+        logging.debug(f"First tokenized note: {tokenized_notes[0]}")
     else:
-        logging.warning("tokenized_notes is empty.")  # Debug log
+        logging.warning("tokenized_notes is empty.")
 
     # Check sequence length and raag labels length
     logging.info(f"Sequence length: {sequence_length}")
@@ -122,7 +109,7 @@ def main():
     sequences_dataset = create_sequences(tokenized_notes, sequence_length, batch_size * strategy.num_replicas_in_sync, raag_labels)
     logging.info("Data preprocessing complete.")
 
-    end_time = time.time()  # End timer
+    end_time = time.time()
     logging.info(f"Data preprocessing took {end_time - start_time:.2f} seconds")
 
     # Split the dataset in train and validation
@@ -135,7 +122,6 @@ def main():
     # Model Creation, compilation and training within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
-        # Compile the model INSIDE strategy.scope()
         model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         # Model Checkpoint
@@ -158,7 +144,7 @@ def main():
             validation_data=validation_dataset,
             epochs=epochs,
             callbacks=[early_stopping, model_checkpoint_callback],
-            verbose=1  # Set verbose=1 to see progress bars
+            verbose=1
         )
         training_end_time = time.time()
         logging.info(f"Model training took {training_end_time - training_start_time:.2f} seconds")
@@ -189,7 +175,7 @@ def main():
         plt.title('Training and Validation Loss')
 
         plt.tight_layout()
-        os.makedirs(os.path.join(repo_dir, "plots"), exist_ok=True)  # create the path if it doesn't exist
+        os.makedirs(os.path.join(repo_dir, "plots"), exist_ok=True)
         plt.savefig(os.path.join(repo_dir, "plots", f"{model_name}_training_history.png"))
         logging.info("Training history plot saved.")
 
