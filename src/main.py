@@ -9,9 +9,12 @@ from models.data_utils import load_and_preprocess_data, extract_all_notes, creat
 from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music, generate_music
 from models.model_builder import create_model
 from tqdm import tqdm  # Import tqdm for progress bars
+import subprocess
+import sys
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.FileHandler("main.log"), logging.StreamHandler()])
 
 # TPU Initialization
 try:
@@ -30,22 +33,13 @@ else:
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 def main():
+    logging.info("Starting main process...")
+    start_time = time.time()
+
+    # Determine paths based on the environment (Colab or local)
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
-    else:
-        repo_dir = os.path.dirname(os.path.abspath(__file__))
-        repo_dir = os.path.dirname(repo_dir)  # Go up one more level
-
-    # Load Config - Now always load config.yaml with absolute path
-    config_file = os.path.join(repo_dir, "config.yaml")  # Use absolute path
-
-    with open(config_file, "r") as f:
-        config = yaml.safe_load(f)
-
-    # Data paths
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         data_path = "/content/drive/MyDrive/"
-        repo_dir = "/content/drive/MyDrive/music_generation_repo"
         print(f"Running on Colab. repo_dir: {repo_dir}")
         print(f"Running on Colab. data_path: {data_path}")
     else:
@@ -53,11 +47,39 @@ def main():
         data_path = os.path.dirname(repo_dir)
         print(f"Running locally. repo_dir: {repo_dir}")
         print(f"Running locally. data_path: {data_path}")
-    
+
+    # Load Config - Now always load config.yaml with absolute path
+    config_file = os.path.join(repo_dir, "config.yaml")
+    with open(config_file, "r") as f:
+        config = yaml.safe_load(f)
+
     sequence_length = config['sequence_length']
     model_name = config.get('model_name', 'MusicTransformer')
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')
-    batch_size = config['batch_size'] *2 # Increased batch size
+    batch_size = config['batch_size']
+
+    # Run train.py using subprocess
+    train_script_path = os.path.join(repo_dir, "train.py")
+    logging.info(f"Running train.py from: {train_script_path}")
+    try:
+        logging.info("Starting train.py...")
+        train_process = subprocess.run(
+            ["python", train_script_path],  # run train.py with python
+            capture_output=True,
+            text=True,
+            check=True  # Raise an exception for non-zero exit codes
+        )
+        # Log train.py's output
+        logging.info("train.py output:\n" + train_process.stdout)
+        logging.info("train.py completed successfully.")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error running train.py: {e}")
+        logging.error(f"train.py stderr:\n{e.stderr}")
+        return
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
+        return
+
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -164,14 +186,9 @@ def main():
         # Save the generated sequence
         with open('generated_sequence.pickle', 'wb') as f:
             pickle.dump(generated_sequence, f)
+        
+    logging.info(f"Total execution time: {time.time() - start_time:.2f} seconds")
+    logging.info("Main process completed.")
 
-def check_expected_lengths(tokenized_notes, raag_labels, sequence_length):
-    """Checks and logs the expected lengths of tokenized_notes, raag_labels, and sequence_length."""
-    logging.info("Checking expected lengths...")
-    logging.info(f"Expected length of raag_labels: {len(tokenized_notes) - sequence_length if tokenized_notes and sequence_length else 'N/A'}")
-    logging.info(f"Actual length of tokenized_notes: {len(tokenized_notes)}")
-    logging.info(f"Actual length of raag_labels: {len(raag_labels)}")
-    logging.info(f"Sequence length: {sequence_length}")
-    logging.info("Length check completed.")
 if __name__ == "__main__":
     main()
