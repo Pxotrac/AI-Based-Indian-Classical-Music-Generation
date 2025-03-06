@@ -241,21 +241,28 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
 
-    dataset = tf.data.Dataset.from_tensor_slices((tokenized_notes_tensor,raag_labels_tensor ))
-    dataset = dataset.window(size=sequence_length + 1, shift=1, drop_remainder=True)
+    # Create a dataset of (notes, raag_labels) pairs
+    dataset = tf.data.Dataset.from_tensor_slices((tokenized_notes_tensor, raag_labels_tensor))
     
-    def split_window(notes_window, raag_window):
-        """Split the window into features and label."""
-        notes_seq = notes_window[:-1]
-        target_note = notes_window[-1]
-        raag_label = raag_window #use the sequence length
-        return {"notes_input": notes_seq, "raag_label": raag_label}, target_note
-    
-    def flat_window(window_notes, window_raag):
-        """Flatten windows to create sequences."""
-        return tf.data.Dataset.zip((window_notes.batch(sequence_length+1),window_raag.batch(sequence_length+1)))
+    # Window the notes and raag_labels separately
+    notes_window = dataset.window(size=sequence_length , shift=1, drop_remainder=True)
+    def flat_map_function(window_notes, raag_labels):
+        """Flatten and pair the notes and raag label windows."""
+        window_notes = window_notes.batch(sequence_length, drop_remainder=True)
+        window_raag = raag_labels.batch(sequence_length, drop_remainder=True) #we take the sequence_length
 
-    dataset = dataset.flat_map(flat_window)
+        dataset = tf.data.Dataset.zip((window_notes, window_raag))
+        return dataset
+
+    dataset = tf.data.Dataset.zip((notes_window, tf.data.Dataset.from_tensor_slices(raag_labels_tensor)))
+    dataset = dataset.flat_map(flat_map_function)
+
+    def split_window(window_notes, raag_labels):
+        """Split the window into features and label."""
+        notes_seq = window_notes
+        target_note = window_notes[-1] #we use -1 so we get only one element.
+        return {"notes_input": notes_seq, "raag_label": raag_labels}, target_note
+
     dataset = dataset.map(split_window)
     dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
 
