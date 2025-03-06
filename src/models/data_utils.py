@@ -241,31 +241,22 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
 
-    # Create a dataset of (notes, raag_labels) pairs
-    dataset = tf.data.Dataset.from_tensor_slices((tokenized_notes_tensor, raag_labels_tensor))
+    # Create a dataset of indices and then use those to create the right sequences
+    indices = tf.range(len(tokenized_notes_tensor) - sequence_length -1)
+    dataset = tf.data.Dataset.from_tensor_slices(indices)
+    dataset = dataset.map(lambda i: (tokenized_notes_tensor[i:i+sequence_length], raag_labels_tensor[i:i+sequence_length], tokenized_notes_tensor[i + sequence_length]))
     
-    # Window the notes and raag_labels separately
-    notes_window = dataset.window(size=sequence_length , shift=1, drop_remainder=True)
-    def flat_map_function(window_notes, raag_labels):
-        """Flatten and pair the notes and raag label windows."""
-        window_notes = window_notes.batch(sequence_length, drop_remainder=True)
-        window_raag = raag_labels.batch(sequence_length, drop_remainder=True) #we take the sequence_length
-
-        dataset = tf.data.Dataset.zip((window_notes, window_raag))
-        return dataset
-
-    dataset = tf.data.Dataset.zip((notes_window, tf.data.Dataset.from_tensor_slices(raag_labels_tensor)))
-    dataset = dataset.flat_map(flat_map_function)
-
-    def split_window(window_notes, raag_labels):
-        """Split the window into features and label."""
-        notes_seq = window_notes
-        target_note = window_notes[-1] #we use -1 so we get only one element.
-        return {"notes_input": notes_seq, "raag_label": raag_labels}, target_note
-
-    dataset = dataset.map(split_window)
+    # Split into features and labels
+    def format_features_and_labels(notes, raag_labels, target):
+        features = {
+            "notes_input": notes,
+            "raag_label": raag_labels
+        }
+        return features, target
+    
+    dataset = dataset.map(format_features_and_labels)
     dataset = dataset.batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
-
+    
     end_time = time.time()
     logging.info(f"Dataset created in: {end_time - start_time:.2f} seconds")
     logging.info(f"Dataset elements: {tf.data.experimental.cardinality(dataset)}")
