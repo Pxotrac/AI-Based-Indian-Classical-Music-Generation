@@ -1,232 +1,283 @@
 import os
-import pretty_midi
-import numpy as np
-from typing import List, Tuple, Dict
-from collections import defaultdict
 import logging
-import pickle
-from tqdm import tqdm
-import tensorflow as tf  # <--- Add this line
+import numpy as np
+import pretty_midi
+from collections import Counter
+import tensorflow as tf
+import time
 
-def load_midi_file(midi_path: str) -> pretty_midi.PrettyMIDI:
-    """
-    Loads a MIDI file using pretty_midi and returns a PrettyMIDI object.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-    Args:
-        midi_path (str): The path to the MIDI file.
-
-    Returns:
-        pretty_midi.PrettyMIDI: The loaded MIDI file as a PrettyMIDI object.
-    """
+def load_tonic(filepath):
+    """Loads the tonic (Sa) frequency from the .ctonic.txt file."""
+    directory = os.path.dirname(filepath)
+    file_name = os.path.basename(filepath).replace(".pitch.txt",".ctonic.txt")
+    tonic_file = os.path.join(directory,file_name)
     try:
-        midi_data = pretty_midi.PrettyMIDI(midi_path)
-        return midi_data
+        with open(tonic_file, 'r') as f:
+            tonic_hz_str = f.readline().strip()
+            tonic_hz = float(tonic_hz_str)
+            return tonic_hz
+    except FileNotFoundError:
+        logging.warning(f"Tonic file not found: {tonic_file}")
+        return None
+    except ValueError:
+        logging.warning(f"Invalid tonic value in file: {tonic_file}")
+        return None
     except Exception as e:
-        logging.error(f"Failed to load MIDI file {midi_path}: {e}")
+        logging.error(f"Error loading file {tonic_file}: {e}")
         return None
 
-def midi_to_notes_list(midi_data: pretty_midi.PrettyMIDI) -> List[str]:
-    """
-    Extracts notes from a PrettyMIDI object and returns a list of note strings.
-
-    Args:
-        midi_data (pretty_midi.PrettyMIDI): The MIDI data.
-
-    Returns:
-        List[str]: A list of note strings.
-    """
-    notes_list = []
+def load_pitch_data(filepath):
+    """Extracts pitch information from the .pitch.txt file."""
+    pitches = []
     try:
-        for instrument in midi_data.instruments:
-            for note in instrument.notes:
-                notes_list.append(f"{note.pitch},{note.start:.2f},{note.end:.2f},{note.velocity}")
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if '\t' in line:
+                    parts = line.split('\t')
+                    line = parts[0]
+                try:
+                    pitch = float(line)
+                    pitches.append(pitch)
+                except ValueError:
+                    logging.warning(f"Invalid pitch value found in file: {filepath}. Skipping this line.")
+                    continue
+            return pitches
+    except FileNotFoundError:
+        logging.warning(f"Pitch file not found: {filepath}")
+        return None
     except Exception as e:
-        logging.error(f"Failed to convert MIDI data to notes list: {e}")
-        return []
-    return notes_list
+        logging.error(f"Error loading file {filepath}: {e}")
+        return None
 
-def process_raag_folder(raag_path: str) -> List[Dict]:
-    """
-    Processes a folder containing MIDI files for a specific raag.
-
-    Args:
-        raag_path (str): The path to the raag folder.
-
-    Returns:
-        List[Dict]: A list of dictionaries, each containing data for a MIDI file.
-    """
-    raag_name = os.path.basename(raag_path)
-    raag_output = []
-
-    for file_name in os.listdir(raag_path):
-        if file_name.endswith(".mid"):
-            midi_path = os.path.join(raag_path, file_name)
-            midi_data = load_midi_file(midi_path)
-            if midi_data is None:
-                continue
-            notes_list = midi_to_notes_list(midi_data)
-            if not notes_list:
-                continue
-            raag_output.append({
-                "raag": raag_name,
-                "file_name": file_name,
-                "notes": notes_list
-            })
-    return raag_output
-
-def load_and_preprocess_data(repo_dir, data_path, num_raags_to_select=None) -> List[Dict]:
-    """
-    Loads and preprocesses data from raag folders.
-
-    Args:
-        repo_dir (str): The root directory of the repository.
-        data_path (str): The path to the data directory.
-        num_raags_to_select (int, optional): The number of raags to select. Defaults to None (all raags).
-
-    Returns:
-        List[Dict]: A list of dictionaries, each containing data for a MIDI file.
-    """
+def load_sections(filepath):
+    """Loads section markers from the .sections-manual-p.txt file."""
+    directory = os.path.dirname(filepath)
+    file_name = os.path.basename(filepath).replace(".pitch.txt",".sections-manual-p.txt")
+    sections_file = os.path.join(directory,file_name)
+    try:
+        with open(sections_file, 'r') as f:
+            sections_str = f.readline().strip()
+            sections = sections_str.split("|")
+            return sections
+    except FileNotFoundError:
+        logging.warning(f"Sections file not found: {sections_file}")
+        return None
+    except Exception as e:
+        logging.error(f"Error loading file {sections_file}: {e}")
+        return None
+        
+def hz_to_svara(frequency_hz, tonic_hz):
+    """Converts frequency in Hz to a svara string with octave."""
+    if not frequency_hz or frequency_hz == 0 or not tonic_hz or tonic_hz == 0:
+        return None
     
-    data_dir = os.path.join(data_path, "Dataset")
+    ratios = {
+        "Sa": 1,
+        "Re": 9/8,
+        "Ga": 5/4,
+        "Ma": 4/3,
+        "Pa": 3/2,
+        "Dha": 5/3,
+        "Ni": 15/8
+    }
+    
+    if frequency_hz is None:
+        return None
+    
+    # Calculate the base octave and the number of octaves above the tonic
+    octave = int(round(np.log2(frequency_hz / tonic_hz)))
+    
+    # Calculate the frequency in the same octave as the tonic
+    adjusted_frequency = frequency_hz / (2 ** octave)
+    
+    closest_svara = None
+    min_diff = float('inf')
+    
+    for svara, ratio in ratios.items():
+        svara_freq = tonic_hz * ratio
+        diff = abs(adjusted_frequency - svara_freq)
+        if diff < min_diff:
+            min_diff = diff
+            closest_svara = svara
+            
+    if closest_svara is not None:
+        return f"{closest_svara}{octave}"
+    else:
+        return None
+
+def load_and_preprocess_data(repo_dir, data_path, max_raags=None):
+    """Loads and preprocesses data from the dataset directory."""
+    print(f"Loading data from: {data_path}")
+    logging.info(f"Loading data from: {data_path}")
     all_output = []
-    selected_raags = []
-    if not os.path.exists(data_dir):
-        logging.error(f"Data directory not found: {data_dir}")
-        return []
+    raag_count = 0
+    
+    # Check if the 'hindustani' folder exists
+    dataset_folder = os.path.join(data_path, "hindustani","hindustani")
+    logging.info(f"Checking for dataset folder at: {dataset_folder}")
+    if not os.path.exists(dataset_folder):
+                logging.error(f"Dataset not found in path: {dataset_folder}. There is no 'hindustani' folder inside 'hindustani'")
+                return []
+    else:
+        logging.info(f"Dataset folder found: {dataset_folder}")
 
-    logging.info(f"Loading data from directory: {data_dir}")
+    for artist_folder in os.listdir(dataset_folder):
+        artist_path = os.path.join(dataset_folder, artist_folder)
+        logging.info(f"Processing artist folder: {artist_path}")  # New logging
+        if os.path.isdir(artist_path):
+            for raag_folder in os.listdir(artist_path):#added raag loop
+                raag_path = os.path.join(artist_path, raag_folder) #added raag path
+                logging.info(f"  Processing raag folder: {raag_path}")  # New logging
+                if os.path.isdir(raag_path): #added verify raag is a directory
+                    for file in os.listdir(raag_path):
+                        if file.endswith(".pitch.txt"):
+                            try:
+                                filepath = os.path.join(raag_path, file)
+                                logging.info(f"    Processing file: {filepath}")  # New logging
+                                raag_name = os.path.basename(raag_path)
+                                
+                                # load the data with the pitch filepath
+                                if os.path.exists(filepath):# Verify that the file exist.
+                                    tonic_hz = load_tonic(filepath)
+                                    pitch_data = load_pitch_data(filepath)
+                                    sections = load_sections(filepath)
+                                    if pitch_data:
+                                        pitch_data = [hz_to_svara(pitch, tonic_hz) for pitch in pitch_data if pitch !=0] # Only add not 0
+                                        if len(pitch_data) > 0:
+                                            processed_data = {'raag': raag_name, 'tonic': tonic_hz, 'notes': pitch_data, 'sections': sections}
+                                            all_output.append(processed_data)
+                                            raag_count += 1
+                                else:
+                                    logging.warning(f"Pitch file not found: {filepath}")
+                            except Exception as e:
+                                logging.error(f"Error processing file {filepath}: {e}")
+    if raag_count == 0:
+        logging.error("No raags found. Please check your dataset structure.")
 
-    for raag_folder in os.listdir(data_dir):
-        if num_raags_to_select is not None and len(selected_raags) >= num_raags_to_select:
-            break
-
-        raag_path = os.path.join(data_dir, raag_folder)
-        if os.path.isdir(raag_path):
-            if raag_folder not in selected_raags:
-                selected_raags.append(raag_folder)
-                logging.info(f"processing data from raag: {raag_folder}")
-                all_output.extend(process_raag_folder(raag_path))
-            else:
-                logging.warning(f"Raag {raag_folder} already processed. Skipping.")
+    logging.info(f"Total raags processed: {raag_count}")
+    print(f"Total raags processed: {raag_count}")
     return all_output
 
-def extract_all_notes(data_output: List[Dict]) -> Tuple[List[str], List[Dict]]:
-    """
-    Extracts all notes from the data output and returns a list of notes and the filtered data.
-
-    Args:
-        data_output (List[Dict]): The data output.
-
-    Returns:
-        Tuple[List[str], List[Dict]]: A tuple containing the list of notes and the filtered data.
-    """
+def extract_all_notes(all_output, min_notes=100):
+    """Extracts all notes from the preprocessed data."""
+    logging.info("Extracting all notes...")
     all_notes = []
     all_output_filtered = []
-    for output_item in data_output:
-        all_output_filtered.append(output_item)
-        all_notes.extend(output_item["notes"])
+    for data_point in all_output:
+        if len(data_point.get('notes', [])) >= min_notes:
+            all_notes.extend(data_point['notes'])  # Use .get('notes', []) to safely handle missing keys
+            all_output_filtered.append(data_point)
+        else:
+            logging.warning(f"Skipping raag {data_point.get('raag')} because it has less than {min_notes} notes.")
+            
+    logging.info(f"Total number of notes found: {len(all_notes)}")
+    logging.info(f"Number of filtered raags: {len(all_output_filtered)}")
     return all_notes, all_output_filtered
 
-def create_tokenizer(notes_list: List[str]) -> tf.keras.preprocessing.text.Tokenizer:
-    """
-    Creates a tokenizer from a list of notes.
+def create_tokenizer(all_notes):
+    """Creates a tokenizer based on the unique notes."""
+    if not all_notes or len(all_notes) == 0:
+        logging.error("No notes provided to create a tokenizer. Aborting.")
+        return None
 
-    Args:
-        notes_list (List[str]): The list of notes.
-
-    Returns:
-        tf.keras.preprocessing.text.Tokenizer: The created tokenizer.
-    """
-    tokenizer = tf.keras.preprocessing.text.Tokenizer()
-    tokenizer.fit_on_texts(notes_list)
+    tokenizer = tf.keras.preprocessing.text.Tokenizer(filters='', lower=False, oov_token="<unk>")
+    tokenizer.fit_on_texts(all_notes)
     return tokenizer
 
-def tokenize_all_notes(tokenizer: tf.keras.preprocessing.text.Tokenizer, all_notes: List[str]) -> List[int]:
-    """
-    Tokenizes a list of notes using the provided tokenizer.
+def tokenize_all_notes(tokenizer, all_notes):
+    """Tokenizes all notes using the provided tokenizer."""
+    logging.info("Tokenizing all notes...")
+    start_time = time.time()  # Start timer
+    tokenized_notes = tokenizer.texts_to_sequences(all_notes)
+    end_time = time.time()  # End timer
+    logging.info(f"Tokenizing all notes took {end_time - start_time:.2f} seconds")
+    return [item for sublist in tokenized_notes for item in sublist]
 
-    Args:
-        tokenizer (tf.keras.preprocessing.text.Tokenizer): The tokenizer.
-        all_notes (List[str]): The list of notes.
+def tokenize_sequence(tokenizer, sequence):
+    """Tokenizes a sequence of notes using the provided tokenizer."""
+    tokenized_sequence = tokenizer.texts_to_sequences([sequence])  # Pass as a list of strings
+    return tokenized_sequence[0]  # Return the first (and only) list of tokenized sequences
 
-    Returns:
-        List[int]: The list of tokenized notes.
-    """
-    return tokenizer.texts_to_sequences(all_notes)
+def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
+    """Creates sequences and labels for model training using tf.data.Dataset."""
+    logging.info("Creating sequences...")
+    start_time = time.time()
 
-def create_raag_id_mapping(all_output_filtered: List[Dict]) -> Tuple[Dict[str, int], int]:
-    """
-    Creates a raag ID mapping from the filtered data.
-
-    Args:
-        all_output_filtered (List[Dict]): The filtered data.
-
-    Returns:
-        Tuple[Dict[str, int], int]: A tuple containing the raag ID mapping and the number of raags.
-    """
-    raag_id_dict = {}
-    num_raags = 0
-    for item in all_output_filtered:
-        raag_name = item["raag"]
-        if raag_name not in raag_id_dict:
-            raag_id_dict[raag_name] = num_raags
-            num_raags += 1
-    return raag_id_dict, num_raags
-
-def generate_raag_labels(all_output_filtered: List[Dict], raag_id_dict: Dict[str, int], num_raags: int, all_notes: List[str], sequence_length: int) -> List[int]:
-    """
-    Generates raag labels for the notes based on the raag ID mapping.
-
-    Args:
-        all_output_filtered (List[Dict]): The filtered data.
-        raag_id_dict (Dict[str, int]): The raag ID mapping.
-        num_raags (int): The number of raags.
-        all_notes (List[str]): The list of all notes.
-        sequence_length (int): The sequence length.
-
-    Returns:
-        List[int]: The generated raag labels.
-    """
-    raag_labels = []
-    for item in all_output_filtered:
-        raag_name = item["raag"]
-        raag_id = raag_id_dict[raag_name]
-        # Generate sequence_length + 1 raag labels for each notes item
-        num_notes = len(item["notes"])
-        raag_labels.extend([raag_id] * num_notes)
-    return raag_labels
-
-def create_sequences(tokenized_notes: List[int], sequence_length: int, batch_size: int, raag_labels: List[int]) -> tf.data.Dataset:
-    """
-    Creates sequences from tokenized notes for training.
-
-    Args:
-        tokenized_notes (List[int]): The tokenized notes.
-        sequence_length (int): The sequence length.
-        batch_size (int): The batch size.
-        raag_labels (List[int]): The raag labels.
-
-    Returns:
-        tf.data.Dataset: The created dataset.
-    """
-    tokenized_notes = np.array(tokenized_notes)
-    raag_labels = np.array(raag_labels)
-
-    # Combine notes and raag labels for sequence creation
-    inputs = []
-    outputs = []
-    for i in range(0, len(tokenized_notes) - sequence_length, 1):
-        seq_in = tokenized_notes[i:i + sequence_length]
-        seq_out = tokenized_notes[i + sequence_length]
-        raag_label = raag_labels[i + sequence_length]
-
-        inputs.append((seq_in, raag_label))
-        outputs.append(seq_out)
-
-    # Convert to TensorFlow Dataset
-    dataset = tf.data.Dataset.from_tensor_slices((np.array(inputs, dtype=object), np.array(outputs)))
-    dataset = dataset.map(lambda x, y: ({"notes_input": x[0], "raag_label": x[1]}, y))
+    # Check if tokenized_notes is empty or if sequence_length is invalid
+    if not tokenized_notes or sequence_length <= 0:
+        logging.warning("No sequences created. Check your input data and parameters.")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
+    # Check if sequence_length is greater than the length of tokenized_notes
+    if sequence_length >= len(tokenized_notes):
+        logging.warning("Sequence length is greater than or equal to the length of tokenized_notes.")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
+    # Check if there are enough raag labels
+    if len(raag_labels) < len(tokenized_notes) - sequence_length:
+        logging.warning("Not enough raag labels to create sequences.")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)  # Return an empty dataset
+    # Check batch size
+    if batch_size <= 0:
+        logging.warning("Batch size is invalid")
+        return tf.data.Dataset.from_tensor_slices(([], [])).batch(batch_size)
+    logging.info("Creating dataset...")
     
-    dataset = dataset.shuffle(buffer_size=1024).batch(batch_size, drop_remainder=True)
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
-    return dataset
+    # Convert to TensorFlow tensors
+    tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
+    raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
+    
+    # Create sequences and next_notes
+    sequences_dataset = tf.data.Dataset.from_tensor_slices(((tokenized_notes_tensor[:-sequence_length],raag_labels_tensor[sequence_length:]),tokenized_notes_tensor[sequence_length:]))
+    sequences_dataset = sequences_dataset.batch(batch_size)
+    end_time = time.time()
+    logging.info(f"Dataset created in: {end_time - start_time:.2f} seconds")
+    logging.info(f"Dataset elements: {tf.data.experimental.cardinality(sequences_dataset)}")
+
+    return sequences_dataset
+
+def split_into_features_and_target_raag(sequence, raag_id):
+    """Splits a sequence into features and target, and returns the raag ID."""
+    input_sequence = sequence[:-1]  # All but the last element
+    target = sequence[-1]  # Last element is the target
+    return input_sequence, target, raag_id  # Return the input sequence, target, and raag ID
+
+def extract_raag_names(all_output):
+    """Extracts unique raag names from the dataset."""
+    raag_names = set()
+    for data_point in all_output:
+        raag_names.add(data_point['raag'])
+    return list(raag_names)
+
+def create_raag_id_mapping(all_output):
+    """Creates a mapping from raag names to unique IDs."""
+    logging.info("Creating raag ID mapping...")
+    raag_names = extract_raag_names(all_output)
+    raag_id_dict = {raag_name: i for i, raag_name in enumerate(raag_names)}
+    logging.info(f"Raag ID mapping created: {raag_id_dict}")
+    logging.info(f"Total unique raags found: {len(raag_id_dict)}")
+    return raag_id_dict, len(raag_id_dict)
+
+def generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length):
+    """Generates raag labels for the entire dataset."""
+    logging.info("Generating raag labels...")
+    start_time = time.time()  # Start timer
+    raag_labels = []
+    for entry in all_output_filtered:
+        raag_id = raag_id_dict.get(entry['raag'], -1)  # Get raag ID from the dictionary, default to -1 if not found
+        if raag_id != -1:
+            raag_labels.extend([raag_id] * len(entry['notes']))  # Assign raag ID to all notes in the entry
+        else:
+             logging.warning(f"Raag not found in raag_id_dict: {entry['raag']}. This raag will be ignored")
+            
+    if len(raag_labels) < (len(all_notes) - sequence_length):
+        logging.warning(f"The length of raag_labels ({len(raag_labels)}) is less than the length of tokenized_notes - sequence_length ({len(all_notes) - sequence_length}).")
+    
+    if not raag_labels:
+        logging.error("No valid raag labels were generated. Please check your data.")
+
+    end_time = time.time()  # End timer
+    logging.info(f"Total raag labels generated: {len(raag_labels)}")
+    logging.info(f"Raag labels generated in {end_time - start_time:.2f} seconds")
+    return raag_labels
