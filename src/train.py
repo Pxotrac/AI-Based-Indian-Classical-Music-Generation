@@ -88,7 +88,7 @@ def main():
     start_time = time.time()
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path)
+    all_output = load_and_preprocess_data(repo_dir, data_path, num_raags_to_select) #added num_raags_to_select
     logging.info("Data loaded.")
     if all_output is None or len(all_output) == 0:
         logging.error("No data was loaded. Check the data. Aborting")
@@ -186,7 +186,12 @@ def main():
             save_best_only=True)
 
         # Early Stopping
-        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        early_stopping = EarlyStopping(
+            monitor='val_loss',
+            patience=patience,  # Use the value from config.yaml
+            restore_best_weights=True,
+            min_delta=0.001 #minimum change
+        )
 
         # Training
         logging.info("Starting model training...")
