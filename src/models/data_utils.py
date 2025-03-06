@@ -127,8 +127,8 @@ def load_and_preprocess_data(repo_dir, data_path, num_raags_to_select=None): #ad
     
     for artist_folder in os.listdir(dataset_folder):
         artist_path = os.path.join(dataset_folder, artist_folder)
-        logging.info(f"Processing artist folder: {artist_path}")  # New logging
         if os.path.isdir(artist_path):
+            logging.info(f"Processing artist folder: {artist_path}")  # New logging
             for raag_folder in os.listdir(artist_path):#added raag loop
                 if num_raags_to_select is not None and len(selected_raags) >= num_raags_to_select:
                     logging.info(f"Reached maximum number of raags to select: {num_raags_to_select}")
@@ -164,6 +164,8 @@ def load_and_preprocess_data(repo_dir, data_path, num_raags_to_select=None): #ad
                                 logging.error(f"Error processing file {filepath}: {e}")
                 else:
                     logging.warning(f"Raag path {raag_path} is not a directory, skipping")
+        else:
+          logging.warning(f"Artist path {artist_path} is not a directory, skipping")
 
     if raag_count == 0:
         logging.error("No raags found. Please check your dataset structure.")
@@ -216,7 +218,6 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     """Creates sequences and labels for model training using tf.data.Dataset."""
     logging.info("Creating sequences...")
     start_time = time.time()
-
     # Check if tokenized_notes is empty or if sequence_length is invalid
     if not tokenized_notes or sequence_length <= 0:
         logging.warning("No sequences created. Check your input data and parameters.")
@@ -238,22 +239,27 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     # Convert to TensorFlow tensors
     tokenized_notes_tensor = tf.constant(tokenized_notes, dtype=tf.int32)
     raag_labels_tensor = tf.constant(raag_labels, dtype=tf.int32)
-
+    
     # Create sequences and next_notes
-    inputs = []
+    notes_input = []
+    raag_input=[]
     outputs = []
     for i in range(0, len(tokenized_notes) - sequence_length, 1):
         seq_in = tokenized_notes_tensor[i:i + sequence_length]
         seq_out = tokenized_notes_tensor[i + sequence_length]
-        raag_label = raag_labels_tensor[i] #only one raag label for each sequence
+        raag_label = raag_labels_tensor[i:i + sequence_length] #modified
 
-        inputs.append((seq_in, raag_label))
+        notes_input.append(seq_in)
+        raag_input.append(raag_label)
         outputs.append(seq_out)
 
     # Convert to TensorFlow Dataset
-    dataset = tf.data.Dataset.from_tensor_slices(({"notes_input": np.array([item[0] for item in inputs], dtype=np.int32), "raag_label": np.array([item[1] for item in inputs], dtype=np.int32)}, np.array(outputs, dtype=np.int32)))
+    dataset = tf.data.Dataset.from_tensor_slices(({"notes_input": tf.constant(notes_input, dtype=tf.int32), "raag_label": tf.constant(raag_input, dtype=tf.int32)}, tf.constant(outputs, dtype=tf.int32)))
     dataset = dataset.shuffle(buffer_size=1024).batch(batch_size, drop_remainder=True)
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    end_time = time.time()
+    logging.info(f"Dataset created in: {end_time - start_time:.2f} seconds")
+    logging.info(f"Dataset elements: {tf.data.experimental.cardinality(dataset)}")
     return dataset
 
 def split_into_features_and_target_raag(sequence, raag_id):
