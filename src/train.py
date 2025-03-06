@@ -61,6 +61,7 @@ def filter_raags(all_output, num_raags_to_select=None):
     return filtered_data, selected_raags
 
 def main():
+    logging.info("Running main in train.py...")
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
         data_path = "/content/drive/MyDrive/"  # correct path
