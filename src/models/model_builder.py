@@ -64,9 +64,10 @@ class MusicTransformer(tf.keras.Model):
         x = tf.concat([x, raag_embeddings], axis=-1)
 
         # Output Layer
-        x = self.dense(x)
+        x = self.dense(x) # [batch_size, sequence_length, vocab_size]
+        x = x[:, -1, :] # we only take the last prediction
 
-        return x  # [batch_size, sequence_length, vocab_size]
+        return x  # [batch_size, vocab_size] # [batch_size, sequence_length, vocab_size]
 
 class PositionalEncoding(tf.keras.layers.Layer):
     """Positional encoding layer."""
@@ -196,7 +197,7 @@ def create_model(vocab_size, num_raags, sequence_length, strategy):
         
         transformer_output = MusicTransformer(vocab_size, num_raags, sequence_length)([notes_input, raag_label])
         # Add a Dense layer with softmax activation for the output
-        output = tf.keras.layers.Dense(vocab_size, activation='softmax')(transformer_output)
+        output = transformer_output #removed dense, because it is already in MusicTransformer.
 
         model = tf.keras.Model(inputs=[notes_input, raag_label], outputs=output, name='music_transformer')
         return model
