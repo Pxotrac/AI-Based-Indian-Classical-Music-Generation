@@ -59,7 +59,7 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
         data_path = os.path.dirname(repo_dir)
         print(f"Running locally. repo_dir: {repo_dir}")
         print(f"Running locally. data_path: {data_path}")
-
+    repo_dir = os.path.abspath(repo_dir) #added this line, to avoid issues with relative paths.
     # Load Config - Now always load config.yaml with absolute path
     config_file = os.path.join(repo_dir, "config.yaml")
     with open(config_file, "r") as f:
@@ -181,4 +181,3 @@ if __name__ == "__main__":
     #main() #generate all raags with the default model.
     #main(selected_model_name="indianraga_model") #generate all raags with "indianraga_model.keras".
     main(selected_model_name="indianraga_model", selected_raag="Raag Bahar") #generate only Raag Bahar with "indianraga_model.keras".
-
