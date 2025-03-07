@@ -2,10 +2,9 @@ import os
 import logging
 import time
 import yaml
-import pickle
 import tensorflow as tf
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
-from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_raag_id_mapping, generate_raag_labels
+from models.music_utils import generate_music_with_tonic, generate_random_seed, generate_raag_music
 from models.model_builder import create_model
 
 # Set up logging
@@ -49,49 +48,20 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
     start_time = time.time()
 
     # Determine paths based on the environment (Colab or local)
-    if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
-        repo_dir = "/content/drive/MyDrive/music_generation_repo"
-        data_path = "/content/drive/MyDrive/"
-        print(f"Running on Colab. repo_dir: {repo_dir}")
-        print(f"Running on Colab. data_path: {data_path}")
-    else:
-        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        data_path = os.path.dirname(repo_dir)
-        print(f"Running locally. repo_dir: {repo_dir}")
-        print(f"Running locally. data_path: {data_path}")
-    repo_dir = os.path.abspath(repo_dir) #added this line, to avoid issues with relative paths.
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_path = os.path.dirname(repo_dir)
+    print(f"Running locally. repo_dir: {repo_dir}")
+    print(f"Running locally. data_path: {data_path}")
+
     # Load Config - Now always load config.yaml with absolute path
     config_file = os.path.join(repo_dir, "config.yaml")
     with open(config_file, "r") as f:
         config = yaml.safe_load(f)
 
     sequence_length = config['sequence_length']
-    
-    # Load Tokenizer
-    tokenizer_path = os.path.join(repo_dir, "models", "ragatokenizer.pkl")
-    if not os.path.exists(tokenizer_path):
-        logging.error(f"Tokenizer file not found at {tokenizer_path}. Aborting.")
-        return
-    with open(tokenizer_path, 'rb') as f:
-        tokenizer = pickle.load(f)
-
-    if not tokenizer:
-        logging.error("Tokenizer was not created. Check preprocessing. Aborting")
-        return
-    if len(tokenizer.word_index) < 2:
-        logging.error("Tokenizer created a vocabulary with less than 2 words. Check your notes data. Aborting.")
-        return
-
-    vocab_size = len(tokenizer.word_index) + 1
-    logging.info(f"Vocab size: {vocab_size}")
-    print(f"Tokenizer vocabulary: {tokenizer.word_index}")
-    if vocab_size <= 1:
-        logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
-        return
         
     # Model Creation and generation within strategy.scope()
     with strategy.scope():
-        model = create_model(vocab_size, 10, sequence_length, strategy) #added 10 as num_raags, to load the model.
         # load the model
         model_path = os.path.join(repo_dir, "models", f"{selected_model_name}.keras")
         # Check if the model file exists before loading
@@ -122,7 +92,24 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
         if not all_notes:
             logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
             return
+        # Tokenization and vocabulary creation
+        tokenizer = create_tokenizer(all_notes)
 
+        if tokenizer is None:
+            logging.error("Tokenizer was not created. Check preprocessing. Aborting")
+            return
+
+        if len(tokenizer.word_index) < 2:
+            logging.error("Tokenizer created a vocabulary with less than 2 words. Check your notes data. Aborting.")
+            return
+
+        vocab_size = len(tokenizer.word_index) + 1
+        logging.info(f"Vocab size: {vocab_size}")
+        print(f"Tokenizer vocabulary: {tokenizer.word_index}")
+        if vocab_size <= 1:
+            logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
+            return
+        
         # Raag ID mapping
         logging.info("Creating raag ID mapping...")
         raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)

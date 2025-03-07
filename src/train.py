@@ -48,9 +48,9 @@ def filter_raags(all_output, num_raags_to_select=None):
     for item in all_output:
         raag_name = item.get("raag")
         if raag_name not in unique_raags:
-          unique_raags.append(raag_name)
-          if len(unique_raags) >= num_raags_to_select:
-            break # end of raags
+            unique_raags.append(raag_name)
+            if len(unique_raags) >= num_raags_to_select:
+                break  # end of raags
         
     selected_raags = unique_raags[:num_raags_to_select]
     # filter dataset
@@ -81,7 +81,7 @@ def main():
     validation_split = config['validation_split']
     patience = config['patience']
     model_name = config.get('model_name', 'my_model')
-    tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')
+    #tokenizer_name = config.get('tokenizer_name', 'my_tokenizer') # removed
     num_raags_to_select = config.get("num_raags_to_select", None) # Default to None (all raags)
     min_notes = config.get("min_notes", 100)
 
@@ -213,12 +213,13 @@ def main():
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 
-        # Save tokenizer
-        tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
-        os.makedirs(os.path.dirname(tokenizer_path), exist_ok=True)  # Create the directory if it doesn't exist
-        with open(tokenizer_path, 'wb') as f:
-            pickle.dump(tokenizer, f)
-        logging.info(f"Tokenizer saved to {tokenizer_path}")
+        # Save tokenizer (no longer saving tokenizer separately)
+        # tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
+        # os.makedirs(os.path.dirname(tokenizer_path), exist_ok=True)  # Create the directory if it doesn't exist
+        # with open(tokenizer_path, 'wb') as f:
+        #     pickle.dump(tokenizer, f)
+        # logging.info(f"Tokenizer saved to {tokenizer_path}")
+        logging.info(f"Tokenizer not saved, as it will be created in the main.py")
 
         # Plot training history
         plt.figure(figsize=(12, 6))
