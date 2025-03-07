@@ -5,21 +5,17 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes, tokenize_sequence
-from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music, generate_music
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
+from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music
 from models.model_builder import create_model
-from tqdm import tqdm  # Import tqdm for progress bars
-import subprocess
-import sys
-import numpy as np
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler("main.log"), logging.StreamHandler()])
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Use the default strategy for CPU and single GPU
 strategy = tf.distribute.get_strategy()
 print("REPLICAS: ", strategy.num_replicas_in_sync)
+
 # --- Data Filtering ---
 def filter_raags(all_output, num_raags_to_select=None):
     """
@@ -37,23 +33,23 @@ def filter_raags(all_output, num_raags_to_select=None):
         return all_output, []  # Return all data and empty list of selected raags
 
     logging.info(f"Generating music on the first {num_raags_to_select} raags.")
-    
+
     unique_raags = []
     filtered_data = []
 
     for item in all_output:
         raag_name = item.get("raag")
         if raag_name not in unique_raags:
-          unique_raags.append(raag_name)
-          if len(unique_raags) >= num_raags_to_select:
-            break # end of raags
-        
+            unique_raags.append(raag_name)
+            if len(unique_raags) >= num_raags_to_select:
+                break  # end of raags
+
     selected_raags = unique_raags[:num_raags_to_select]
     # filter dataset
     for item in all_output:
         if item.get("raag") in selected_raags:
             filtered_data.append(item)
-    
+
     return filtered_data, selected_raags
 
 def main():
@@ -78,21 +74,13 @@ def main():
         config = yaml.safe_load(f)
 
     sequence_length = config['sequence_length']
-    #model_name = config.get('model_name', 'MusicTransformer') #removed as we are not using the model_name
-    #tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer') #removed as we are not using the tokenizer_name
     num_raags_to_select = config.get("num_raags_to_select", None)
-
-    # Run train.py using subprocess with live output (commented)
-    #train_script_path = os.path.join("train.py") #commented, as we dont need to run it.
-    #logging.info(f"Running train.py from: {train_script_path}") #commented, as we dont need to run it.
-    #run_script_with_live_output(train_script_path, repo_dir) #commented, as we dont need to run it.
-
 
     # Data Preprocessing
     logging.info("Starting data preprocessing for music generation...")
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path, num_raags_to_select) #added num_raags_to_select
+    all_output = load_and_preprocess_data(repo_dir, data_path, num_raags_to_select)
     logging.info("Data loaded.")
     if all_output is None or len(all_output) == 0:
         logging.error("No data was loaded. Check the data. Aborting")
@@ -104,14 +92,13 @@ def main():
         logging.info(f"Selected raags for music generation: {selected_raags}")
 
     # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(filtered_output) #added filtered_output
+    all_notes, all_output_filtered = extract_all_notes(filtered_output)
     if not all_notes:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
         return
 
     # Load Tokenizer
-    #tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle") #commented old code
-    tokenizer_path = os.path.join(repo_dir,"models","ragatokenizer.pkl") #added, to use the trained tokenizer
+    tokenizer_path = os.path.join(repo_dir, "models", "ragatokenizer.pkl")
     if not os.path.exists(tokenizer_path):
         logging.warning(f"Tokenizer file not found at {tokenizer_path}.")
         return
@@ -134,7 +121,7 @@ def main():
 
     # Raag ID mapping
     logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered) #added filtered_output
+    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)
     logging.info("Raag ID mapping complete")
     logging.info(f"Number of raags: {num_raags}")
     print(f"Raag ID dict: {raag_id_dict}")
@@ -149,22 +136,20 @@ def main():
 
     # Generate raag labels
     logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length) #added filtered_output
+    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length)
     logging.info("Raag labels generated")
 
     # Model Creation and generation within strategy.scope()
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         # load the model
-        #model_path = os.path.join(repo_dir, "models", f"{model_name}.keras") #commented old code
-        model_path = os.path.join(repo_dir,"models","indianraga_model.keras")#added correct path for our trained model.
+        model_path = os.path.join(repo_dir, "models", "indianraga_model.keras")
         # Check if the model file exists before loading
         if not os.path.exists(model_path):
             logging.warning(f"Model file not found at {model_path}.")
             return
 
-        #model.load_weights(model_path) #commented old code
-        model = tf.keras.models.load_model(model_path) #added new code to load entire model
+        model = tf.keras.models.load_model(model_path)
         logging.info("Model loaded")
 
         # Music Generation with random seed
@@ -196,7 +181,7 @@ def main():
             # Save the generated Raag music
             with open(f'generated_tokens_raag_{raag_name}.pickle', 'wb') as f:
                 pickle.dump(generated_tokens_raag, f)
-    
+
     logging.info(f"Total execution time: {time.time() - start_time:.2f} seconds")
     logging.info("Main process completed.")
 
