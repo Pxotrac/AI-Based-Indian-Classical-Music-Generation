@@ -146,7 +146,7 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
         # Music Generation with random seed
         logging.info("Generating Music with random seed...")
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
-        token_frequencies = get_token_frequencies(all_notes)
+        #token_frequencies = get_token_frequencies(all_notes) # this is not required, as we are not using it.
 
         # Loop over the selected raags to generate music for each
         for raag_name in selected_raags:
@@ -181,3 +181,4 @@ if __name__ == "__main__":
     #main() #generate all raags with the default model.
     #main(selected_model_name="indianraga_model") #generate all raags with "indianraga_model.keras".
     main(selected_model_name="indianraga_model", selected_raag="Raag Bahar") #generate only Raag Bahar with "indianraga_model.keras".
+
