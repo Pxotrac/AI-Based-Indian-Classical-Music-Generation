@@ -59,7 +59,8 @@ class MusicTransformer(tf.keras.Model):
         x = self.transformer_layer(x, training=training)
         
         # Raag Conditioning
-        raag_embeddings = self.raag_embedding(raag_labels) # [batch_size, sequence_length, embedding_dim]
+        raag_embeddings = self.raag_embedding(tf.expand_dims(raag_labels, axis=1)) # [batch_size, 1, embedding_dim] added expand_dims
+        raag_embeddings = tf.tile(raag_embeddings, [1, self.sequence_length, 1])
         # concatenate
         x = tf.concat([x, raag_embeddings], axis=-1) # modified
 
