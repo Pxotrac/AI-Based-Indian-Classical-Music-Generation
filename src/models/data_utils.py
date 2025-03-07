@@ -1,8 +1,6 @@
 import os
 import logging
 import numpy as np
-import pretty_midi
-from collections import Counter
 import tensorflow as tf
 import time
 
@@ -244,7 +242,7 @@ def create_sequences(tokenized_notes, sequence_length, batch_size, raag_labels):
     # Create a dataset of indices and then use those to create the right sequences
     indices = tf.range(len(tokenized_notes_tensor) - sequence_length -1)
     dataset = tf.data.Dataset.from_tensor_slices(indices)
-    dataset = dataset.map(lambda i: (tokenized_notes_tensor[i:i+sequence_length], tf.tile(tf.expand_dims(raag_labels_tensor[i], axis=0), [sequence_length]), tokenized_notes_tensor[i + sequence_length]))
+    dataset = dataset.map(lambda i: (tokenized_notes_tensor[i:i+sequence_length], raag_labels_tensor[i], tokenized_notes_tensor[i + sequence_length]))
 
     # Split into features and labels
     def format_features_and_labels(notes, raag_labels, target):
@@ -296,9 +294,6 @@ def generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes
         else:
              logging.warning(f"Raag not found in raag_id_dict: {entry['raag']}. This raag will be ignored")
             
-    if len(raag_labels) < (len(all_notes) - sequence_length):
-        logging.warning(f"The length of raag_labels ({len(raag_labels)}) is less than the length of tokenized_notes - sequence_length ({len(all_notes) - sequence_length}).")
-    
     if not raag_labels:
         logging.error("No valid raag labels were generated. Please check your data.")
 
