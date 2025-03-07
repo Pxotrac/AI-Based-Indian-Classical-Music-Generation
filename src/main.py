@@ -4,7 +4,6 @@ import time
 import yaml
 import pickle
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
 from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music
 from models.model_builder import create_model
@@ -17,42 +16,35 @@ strategy = tf.distribute.get_strategy()
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
 # --- Data Filtering ---
-def filter_raags(all_output, num_raags_to_select=None):
+def filter_raags(all_output, raag_name=None):
     """
-    Filters the dataset to include only the first 'num_raags_to_select' raags.
+    Filters the dataset to include only the specified raag, or all raags if None.
 
     Args:
         all_output (list): The entire dataset.
-        num_raags_to_select (int, optional): The number of raags to select. Defaults to None (all raags).
+        raag_name (str, optional): The name of the raag to select. Defaults to None (all raags).
 
     Returns:
         list, list: filtered dataset, list of selected raags.
     """
-    if num_raags_to_select is None:
+    if raag_name is None:
         logging.info("Generating music on the entire dataset.")
-        return all_output, []  # Return all data and empty list of selected raags
+        return all_output, [item.get("raag") for item in all_output]  # Return all data and all raag names
 
-    logging.info(f"Generating music on the first {num_raags_to_select} raags.")
+    logging.info(f"Generating music only on raag: {raag_name}")
 
-    unique_raags = []
-    filtered_data = []
+    filtered_data = [item for item in all_output if item.get("raag") == raag_name]
+    return filtered_data, [raag_name]  # Return the filtered data and the selected raag name
 
-    for item in all_output:
-        raag_name = item.get("raag")
-        if raag_name not in unique_raags:
-            unique_raags.append(raag_name)
-            if len(unique_raags) >= num_raags_to_select:
-                break  # end of raags
 
-    selected_raags = unique_raags[:num_raags_to_select]
-    # filter dataset
-    for item in all_output:
-        if item.get("raag") in selected_raags:
-            filtered_data.append(item)
+def main(selected_model_name="indianraga_model", selected_raag=None):
+    """
+    Main function to generate music using a pre-trained model.
 
-    return filtered_data, selected_raags
-
-def main():
+    Args:
+        selected_model_name (str): The name of the model file (without extension) to use for generation.
+        selected_raag(str, optional): The name of the raag to generate. If None, it will generate music in all raags.
+    """
     logging.info("Starting main process...")
     start_time = time.time()
 
@@ -74,20 +66,19 @@ def main():
         config = yaml.safe_load(f)
 
     sequence_length = config['sequence_length']
-    num_raags_to_select = config.get("num_raags_to_select", None)
 
     # Data Preprocessing
     logging.info("Starting data preprocessing for music generation...")
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path, num_raags_to_select)
+    all_output = load_and_preprocess_data(repo_dir, data_path)
     logging.info("Data loaded.")
     if all_output is None or len(all_output) == 0:
         logging.error("No data was loaded. Check the data. Aborting")
         return
 
     # Filter data by raag
-    filtered_output, selected_raags = filter_raags(all_output, num_raags_to_select)
+    filtered_output, selected_raags = filter_raags(all_output, selected_raag)
     if selected_raags:
         logging.info(f"Selected raags for music generation: {selected_raags}")
 
@@ -100,7 +91,7 @@ def main():
     # Load Tokenizer
     tokenizer_path = os.path.join(repo_dir, "models", "ragatokenizer.pkl")
     if not os.path.exists(tokenizer_path):
-        logging.warning(f"Tokenizer file not found at {tokenizer_path}.")
+        logging.error(f"Tokenizer file not found at {tokenizer_path}. Aborting.")
         return
     with open(tokenizer_path, 'rb') as f:
         tokenizer = pickle.load(f)
@@ -143,7 +134,7 @@ def main():
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         # load the model
-        model_path = os.path.join(repo_dir, "models", "indianraga_model.keras")
+        model_path = os.path.join(repo_dir, "models", f"{selected_model_name}.keras")
         # Check if the model file exists before loading
         if not os.path.exists(model_path):
             logging.warning(f"Model file not found at {model_path}.")
@@ -186,4 +177,7 @@ def main():
     logging.info("Main process completed.")
 
 if __name__ == "__main__":
-    main()
+    #Example calls:
+    #main() #generate all raags with the default model.
+    #main(selected_model_name="indianraga_model") #generate all raags with "indianraga_model.keras".
+    main(selected_model_name="indianraga_model", selected_raag="Raag Bahar") #generate only Raag Bahar with "indianraga_model.keras".
