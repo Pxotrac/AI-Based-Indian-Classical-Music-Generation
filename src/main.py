@@ -66,28 +66,7 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
         config = yaml.safe_load(f)
 
     sequence_length = config['sequence_length']
-
-    # Data Preprocessing
-    logging.info("Starting data preprocessing for music generation...")
-
-    # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path)
-    logging.info("Data loaded.")
-    if all_output is None or len(all_output) == 0:
-        logging.error("No data was loaded. Check the data. Aborting")
-        return
-
-    # Filter data by raag
-    filtered_output, selected_raags = filter_raags(all_output, selected_raag)
-    if selected_raags:
-        logging.info(f"Selected raags for music generation: {selected_raags}")
-
-    # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(filtered_output)
-    if not all_notes:
-        logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
-        return
-
+    
     # Load Tokenizer
     tokenizer_path = os.path.join(repo_dir, "models", "ragatokenizer.pkl")
     if not os.path.exists(tokenizer_path):
@@ -109,30 +88,10 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
     if vocab_size <= 1:
         logging.error(f"The vocabulary size is too small: {vocab_size}. Please check your data.")
         return
-
-    # Raag ID mapping
-    logging.info("Creating raag ID mapping...")
-    raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)
-    logging.info("Raag ID mapping complete")
-    logging.info(f"Number of raags: {num_raags}")
-    print(f"Raag ID dict: {raag_id_dict}")
-
-    if num_raags == 0:
-        logging.error("No raags were found. Please check your data.")
-        return
-    # Check that there is no error in raag_id_dict
-    if not raag_id_dict:
-        logging.error("The dictionary raag_id_dict is empty. Aborting.")
-        return
-
-    # Generate raag labels
-    logging.info("Generating raag labels...")
-    raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length)
-    logging.info("Raag labels generated")
-
+        
     # Model Creation and generation within strategy.scope()
     with strategy.scope():
-        model = create_model(vocab_size, num_raags, sequence_length, strategy)
+        model = create_model(vocab_size, 10, sequence_length, strategy) #added 10 as num_raags, to load the model.
         # load the model
         model_path = os.path.join(repo_dir, "models", f"{selected_model_name}.keras")
         # Check if the model file exists before loading
@@ -143,6 +102,47 @@ def main(selected_model_name="indianraga_model", selected_raag=None):
         model = tf.keras.models.load_model(model_path)
         logging.info("Model loaded")
 
+        # Data Preprocessing
+        logging.info("Starting data preprocessing for music generation...")
+
+        # Load and preprocess data once
+        all_output = load_and_preprocess_data(repo_dir, data_path)
+        logging.info("Data loaded.")
+        if all_output is None or len(all_output) == 0:
+            logging.error("No data was loaded. Check the data. Aborting")
+            return
+
+        # Filter data by raag
+        filtered_output, selected_raags = filter_raags(all_output, selected_raag)
+        if selected_raags:
+            logging.info(f"Selected raags for music generation: {selected_raags}")
+
+        # Extract all notes
+        all_notes, all_output_filtered = extract_all_notes(filtered_output)
+        if not all_notes:
+            logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
+            return
+
+        # Raag ID mapping
+        logging.info("Creating raag ID mapping...")
+        raag_id_dict, num_raags = create_raag_id_mapping(all_output_filtered)
+        logging.info("Raag ID mapping complete")
+        logging.info(f"Number of raags: {num_raags}")
+        print(f"Raag ID dict: {raag_id_dict}")
+
+        if num_raags == 0:
+            logging.error("No raags were found. Please check your data.")
+            return
+        # Check that there is no error in raag_id_dict
+        if not raag_id_dict:
+            logging.error("The dictionary raag_id_dict is empty. Aborting.")
+            return
+
+        # Generate raag labels
+        logging.info("Generating raag labels...")
+        raag_labels = generate_raag_labels(all_output_filtered, raag_id_dict, num_raags, all_notes, sequence_length)
+        logging.info("Raag labels generated")
+        
         # Music Generation with random seed
         logging.info("Generating Music with random seed...")
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
