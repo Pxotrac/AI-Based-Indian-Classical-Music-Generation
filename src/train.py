@@ -83,6 +83,7 @@ def main():
     model_name = config.get('model_name', 'my_model')
     tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')
     num_raags_to_select = config.get("num_raags_to_select", None) # Default to None (all raags)
+    min_notes = config.get("min_notes", 100)
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -106,7 +107,7 @@ def main():
     
 
     # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(filtered_output)
+    all_notes, all_output_filtered = extract_all_notes(filtered_output,min_notes) #added min_notes
     if len(all_notes) == 0:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
         return
