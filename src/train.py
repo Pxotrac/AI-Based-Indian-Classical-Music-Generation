@@ -215,6 +215,7 @@ def main():
 
         # Save tokenizer
         tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
+        os.makedirs(os.path.dirname(tokenizer_path), exist_ok=True)  # Create the directory if it doesn't exist
         with open(tokenizer_path, 'wb') as f:
             pickle.dump(tokenizer, f)
         logging.info(f"Tokenizer saved to {tokenizer_path}")
