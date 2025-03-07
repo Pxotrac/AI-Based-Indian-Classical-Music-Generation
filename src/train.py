@@ -182,7 +182,7 @@ def main():
         checkpoint_filepath = os.path.join(repo_dir, "checkpoints", f"{model_name}.h5")
         model_checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_filepath,
-            save_weights_only=True,
+            save_weights_only=False,
             monitor='val_loss',
             mode='min',
             save_best_only=True)
@@ -209,7 +209,7 @@ def main():
         logging.info(f"Model training took {training_end_time - training_start_time:.2f} seconds")
 
         # Save the model
-        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.keras")
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 

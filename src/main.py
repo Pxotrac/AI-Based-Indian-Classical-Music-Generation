@@ -216,7 +216,7 @@ def main():
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         # load the model
-        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.keras")
         # Check if the model file exists before loading
         if not os.path.exists(model_path):
             logging.warning(f"Model file not found at {model_path}. Please run train.py first.")
