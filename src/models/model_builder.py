@@ -34,7 +34,6 @@ class MusicTransformer(tf.keras.Model):
         
         # Raag Embedding
         self.raag_embedding = layers.Embedding(input_dim=num_raags, output_dim=embedding_dim)
-        self.concat_dense = layers.Dense(embedding_dim, activation="relu") # added dense layer after concatenation.
 
     def call(self, inputs, training):
         """
@@ -60,11 +59,12 @@ class MusicTransformer(tf.keras.Model):
         x = self.transformer_layer(x, training=training)
         
         # Raag Conditioning
-        raag_embeddings = self.raag_embedding(tf.expand_dims(raag_labels, axis=0)) # [batch_size, 1, embedding_dim] added expand_dims
-        raag_embeddings = tf.tile(raag_embeddings, [1, self.sequence_length, 1])
+        raag_embeddings = self.raag_embedding(raag_labels) # [batch_size, embedding_dim] 
+        raag_embeddings = tf.expand_dims(raag_embeddings, axis=1) # [batch_size, 1, embedding_dim]
+        raag_embeddings = tf.tile(raag_embeddings, [1, self.sequence_length, 1]) # [batch_size, sequence_length, embedding_dim]
+
         # concatenate
-        #x = tf.concat([x, raag_embeddings], axis=-1) # removed concatenation
-        #x = self.concat_dense(x) # removed dense layer
+        x = tf.concat([x, raag_embeddings], axis=-1) # [batch_size, sequence_length, embedding_dim*2]
 
         # Output Layer
         x = self.dense(x) # [batch_size, sequence_length, vocab_size]
