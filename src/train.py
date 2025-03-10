@@ -16,7 +16,52 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 strategy = tf.distribute.get_strategy()
 print("REPLICAS: ", strategy.num_replicas_in_sync)
 
+# --- Configuration ---
+def load_config(repo_dir):
+    """Loads the configuration from config.yaml."""
+    config_file = os.path.join(repo_dir, "config.yaml")
+    with open(config_file, "r") as f:
+        config = yaml.safe_load(f)
+    return config
+
+# --- Data Filtering ---
+def filter_raags(all_output, num_raags_to_select=None):
+    """
+    Filters the dataset to include only the first 'num_raags_to_select' raags.
+
+    Args:
+        all_output (list): The entire dataset.
+        num_raags_to_select (int, optional): The number of raags to select. Defaults to None (all raags).
+
+    Returns:
+        list, list: filtered dataset, list of selected raags.
+    """
+    if num_raags_to_select is None:
+        logging.info("Training on the entire dataset.")
+        return all_output, []  # Return all data and empty list of selected raags
+
+    logging.info(f"Training on the first {num_raags_to_select} raags.")
+    
+    unique_raags = []
+    filtered_data = []
+
+    for item in all_output:
+        raag_name = item.get("raag")
+        if raag_name not in unique_raags:
+          unique_raags.append(raag_name)
+          if len(unique_raags) >= num_raags_to_select:
+            break # end of raags
+        
+    selected_raags = unique_raags[:num_raags_to_select]
+    # filter dataset
+    for item in all_output:
+        if item.get("raag") in selected_raags:
+            filtered_data.append(item)
+    
+    return filtered_data, selected_raags
+
 def main():
+    logging.info("Running main in train.py...")
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
         data_path = "/content/drive/MyDrive/"  # correct path
@@ -28,11 +73,8 @@ def main():
         print(f"Running locally. repo_dir: {repo_dir}")
         print(f"Running locally. data_path: {data_path}")
 
-    # Load Config - Now always load config.yaml with absolute path
-    config_file = os.path.join(repo_dir, "config.yaml")
-    with open(config_file, "r") as f:
-        config = yaml.safe_load(f)
-
+    # Load configuration
+    config = load_config(repo_dir)
     sequence_length = config['sequence_length']
     epochs = config['epochs']
     batch_size = config['batch_size']
@@ -40,20 +82,32 @@ def main():
     patience = config['patience']
     model_name = config.get('model_name', 'my_model')
     tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')
+    num_raags_to_select = config.get("num_raags_to_select", None) # Default to None (all raags)
+    min_notes = config.get("min_notes", 100)
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
     start_time = time.time()
 
     # Load and preprocess data once
-    all_output = load_and_preprocess_data(repo_dir, data_path)
+    all_output = load_and_preprocess_data(repo_dir, data_path, num_raags_to_select) #added num_raags_to_select
     logging.info("Data loaded.")
     if all_output is None or len(all_output) == 0:
         logging.error("No data was loaded. Check the data. Aborting")
         return
 
+    # Filter data by raag
+    filtered_output, selected_raags = filter_raags(all_output, num_raags_to_select)
+    if selected_raags:
+        logging.info(f"Selected raags for training: {selected_raags}")
+    
+    if len(filtered_output) == 0:
+        logging.error("No data after raag filtering. Check raag selection. Aborting.")
+        return
+    
+
     # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(all_output)
+    all_notes, all_output_filtered = extract_all_notes(filtered_output,min_notes) #added min_notes
     if len(all_notes) == 0:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
         return
@@ -128,13 +182,18 @@ def main():
         checkpoint_filepath = os.path.join(repo_dir, "checkpoints", f"{model_name}.h5")
         model_checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_filepath,
-            save_weights_only=True,
+            save_weights_only=False,
             monitor='val_loss',
             mode='min',
             save_best_only=True)
 
         # Early Stopping
-        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        early_stopping = EarlyStopping(
+            monitor='val_loss',
+            patience=patience,  # Use the value from config.yaml
+            restore_best_weights=True,
+            min_delta=0.001 #minimum change
+        )
 
         # Training
         logging.info("Starting model training...")
@@ -150,12 +209,13 @@ def main():
         logging.info(f"Model training took {training_end_time - training_start_time:.2f} seconds")
 
         # Save the model
-        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.keras")
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 
         # Save tokenizer
         tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
+        os.makedirs(os.path.dirname(tokenizer_path), exist_ok=True)  # Create the directory if it doesn't exist
         with open(tokenizer_path, 'wb') as f:
             pickle.dump(tokenizer, f)
         logging.info(f"Tokenizer saved to {tokenizer_path}")
