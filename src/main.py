@@ -5,7 +5,7 @@ import yaml
 import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes, tokenize_sequence
+from models.data_utils import load_and_preprocess_data, extract_all_notes, create_tokenizer, create_sequences, create_raag_id_mapping, generate_raag_labels, tokenize_all_notes
 from models.music_utils import generate_music_with_tonic, generate_random_seed, get_token_frequencies, generate_raag_music, generate_music
 from models.model_builder import create_model
 from tqdm import tqdm  # Import tqdm for progress bars
@@ -216,7 +216,7 @@ def main():
     with strategy.scope():
         model = create_model(vocab_size, num_raags, sequence_length, strategy)
         # load the model
-        model_path = os.path.join(repo_dir, "models", f"{model_name}.keras")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
         # Check if the model file exists before loading
         if not os.path.exists(model_path):
             logging.warning(f"Model file not found at {model_path}. Please run train.py first.")
@@ -247,10 +247,6 @@ def main():
             # Save the generated sequence
             with open(f'generated_sequence_{raag_name}.pickle', 'wb') as f:
                 pickle.dump(generated_sequence, f)
-            
-            # Save the generated Raag music
-            with open(f'generated_tokens_raag_{raag_name}.pickle', 'wb') as f:
-                pickle.dump(generated_tokens_raag, f)
         
     logging.info(f"Total execution time: {time.time() - start_time:.2f} seconds")
     logging.info("Main process completed.")

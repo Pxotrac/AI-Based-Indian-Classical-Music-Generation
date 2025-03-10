@@ -1,9 +1,8 @@
-sequence_length: 20 # reduced
-epochs: 1 # reduced
-batch_size: 16 # reduced
-validation_split: 0.1 # reduced
-patience: 2 # reduced
+sequence_length: 50
+epochs: 5
+batch_size: 64
+validation_split: 0.2
+patience: 10
 model_name: "MusicTransformer"
 tokenizer_name: "transformer_tokenizer"
-num_raags_to_select: 1 #reduced
-min_notes: 20 # reduced
+num_raags_to_select: 5 # Change this to select number of raags or null to use all

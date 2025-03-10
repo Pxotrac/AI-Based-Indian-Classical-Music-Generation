@@ -61,7 +61,6 @@ def filter_raags(all_output, num_raags_to_select=None):
     return filtered_data, selected_raags
 
 def main():
-    logging.info("Running main in train.py...")
     if os.environ.get("COLAB_GPU", "FALSE") == "TRUE":
         repo_dir = "/content/drive/MyDrive/music_generation_repo"
         data_path = "/content/drive/MyDrive/"  # correct path
@@ -83,7 +82,6 @@ def main():
     model_name = config.get('model_name', 'my_model')
     tokenizer_name = config.get('tokenizer_name', 'my_tokenizer')
     num_raags_to_select = config.get("num_raags_to_select", None) # Default to None (all raags)
-    min_notes = config.get("min_notes", 100)
 
     # Data Preprocessing
     logging.info("Starting data preprocessing...")
@@ -107,7 +105,7 @@ def main():
     
 
     # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(filtered_output,min_notes) #added min_notes
+    all_notes, all_output_filtered = extract_all_notes(filtered_output)
     if len(all_notes) == 0:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
         return
@@ -182,7 +180,7 @@ def main():
         checkpoint_filepath = os.path.join(repo_dir, "checkpoints", f"{model_name}.h5")
         model_checkpoint_callback = ModelCheckpoint(
             filepath=checkpoint_filepath,
-            save_weights_only=False,
+            save_weights_only=True,
             monitor='val_loss',
             mode='min',
             save_best_only=True)
@@ -209,13 +207,12 @@ def main():
         logging.info(f"Model training took {training_end_time - training_start_time:.2f} seconds")
 
         # Save the model
-        model_path = os.path.join(repo_dir, "models", f"{model_name}.keras")
+        model_path = os.path.join(repo_dir, "models", f"{model_name}.h5")
         model.save(model_path)
         logging.info(f"Model saved to {model_path}")
 
         # Save tokenizer
         tokenizer_path = os.path.join(repo_dir, "tokenizers", f"{tokenizer_name}.pickle")
-        os.makedirs(os.path.dirname(tokenizer_path), exist_ok=True)  # Create the directory if it doesn't exist
         with open(tokenizer_path, 'wb') as f:
             pickle.dump(tokenizer, f)
         logging.info(f"Tokenizer saved to {tokenizer_path}")
