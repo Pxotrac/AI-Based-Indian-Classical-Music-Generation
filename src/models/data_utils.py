@@ -108,38 +108,30 @@ def hz_to_svara(frequency_hz, tonic_hz):
     else:
         return None
 
-def load_and_preprocess_data(repo_dir, data_path, num_raags_to_select=None): #added num_raags_to_select
+def load_and_preprocess_data(repo_dir, data_path, max_raags=None):
     """Loads and preprocesses data from the dataset directory."""
     print(f"Loading data from: {data_path}")
     logging.info(f"Loading data from: {data_path}")
     all_output = []
     raag_count = 0
-    selected_raags = []
     
     # Check if the 'hindustani' folder exists
     dataset_folder = os.path.join(data_path, "hindustani","hindustani")
     logging.info(f"Checking for dataset folder at: {dataset_folder}")
     if not os.path.exists(dataset_folder):
-        logging.error(f"Dataset not found in path: {dataset_folder}. There is no 'hindustani' folder inside 'hindustani'")
-        return []
+                logging.error(f"Dataset not found in path: {dataset_folder}. There is no 'hindustani' folder inside 'hindustani'")
+                return []
     else:
         logging.info(f"Dataset folder found: {dataset_folder}")
-    
+
     for artist_folder in os.listdir(dataset_folder):
         artist_path = os.path.join(dataset_folder, artist_folder)
         logging.info(f"Processing artist folder: {artist_path}")  # New logging
         if os.path.isdir(artist_path):
             for raag_folder in os.listdir(artist_path):#added raag loop
-                if num_raags_to_select is not None and len(selected_raags) >= num_raags_to_select:
-                    logging.info(f"Reached maximum number of raags to select: {num_raags_to_select}")
-                    break
-                if raag_folder in selected_raags:
-                    logging.info(f"Raag {raag_folder} already selected. Skipping.")
-                    continue
                 raag_path = os.path.join(artist_path, raag_folder) #added raag path
                 logging.info(f"  Processing raag folder: {raag_path}")  # New logging
                 if os.path.isdir(raag_path): #added verify raag is a directory
-                    selected_raags.append(raag_folder)
                     for file in os.listdir(raag_path):
                         if file.endswith(".pitch.txt"):
                             try:
@@ -162,9 +154,6 @@ def load_and_preprocess_data(repo_dir, data_path, num_raags_to_select=None): #ad
                                     logging.warning(f"Pitch file not found: {filepath}")
                             except Exception as e:
                                 logging.error(f"Error processing file {filepath}: {e}")
-                else:
-                    logging.warning(f"Raag path {raag_path} is not a directory, skipping")
-
     if raag_count == 0:
         logging.error("No raags found. Please check your dataset structure.")
 

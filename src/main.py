@@ -65,42 +65,6 @@ def run_script_with_live_output(script_path, repo_dir):
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         return
-    
-# --- Data Filtering ---
-def filter_raags(all_output, num_raags_to_select=None):
-    """
-    Filters the dataset to include only the first 'num_raags_to_select' raags.
-
-    Args:
-        all_output (list): The entire dataset.
-        num_raags_to_select (int, optional): The number of raags to select. Defaults to None (all raags).
-
-    Returns:
-        list, list: filtered dataset, list of selected raags.
-    """
-    if num_raags_to_select is None:
-        logging.info("Generating music on the entire dataset.")
-        return all_output, []  # Return all data and empty list of selected raags
-
-    logging.info(f"Generating music on the first {num_raags_to_select} raags.")
-    
-    unique_raags = []
-    filtered_data = []
-
-    for item in all_output:
-        raag_name = item.get("raag")
-        if raag_name not in unique_raags:
-          unique_raags.append(raag_name)
-          if len(unique_raags) >= num_raags_to_select:
-            break # end of raags
-        
-    selected_raags = unique_raags[:num_raags_to_select]
-    # filter dataset
-    for item in all_output:
-        if item.get("raag") in selected_raags:
-            filtered_data.append(item)
-    
-    return filtered_data, selected_raags
 
 def main():
     logging.info("Starting main process...")
@@ -127,7 +91,6 @@ def main():
     model_name = config.get('model_name', 'MusicTransformer')
     tokenizer_name = config.get('tokenizer_name', 'transformer_tokenizer')
     batch_size = config['batch_size']
-    num_raags_to_select = config.get("num_raags_to_select", None)
 
     # Run train.py using subprocess with live output
     train_script_path = os.path.join("train.py") #we dont need the full path anymore.
@@ -145,14 +108,9 @@ def main():
     if all_output is None or len(all_output) == 0:
         logging.error("No data was loaded. Check the data. Aborting")
         return
-    
-    # Filter data by raag
-    filtered_output, selected_raags = filter_raags(all_output, num_raags_to_select)
-    if selected_raags:
-        logging.info(f"Selected raags for training: {selected_raags}")
 
     # Extract all notes
-    all_notes, all_output_filtered = extract_all_notes(filtered_output) #added filtered output
+    all_notes, all_output_filtered = extract_all_notes(all_output) #added filtered output
     
     if len(all_notes) == 0:
         logging.error("No notes extracted. Check data loading and preprocessing. Aborting.")
@@ -229,24 +187,22 @@ def main():
         seed_sequence = generate_random_seed(tokenizer, sequence_length)
         token_frequencies = get_token_frequencies(all_notes) # modified
         
-        # Loop over the selected raags to generate music for each
-        for raag_name in selected_raags:
-            logging.info(f"Generating music for raag: {raag_name}")
-        
-            # Get raag ID, handling potential KeyError
-            raag_id_value = raag_id_dict.get(raag_name, 0)
-            if raag_id_value == 0 and raag_name not in raag_id_dict:
-                logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Using default ID 0.")
-            # Music generation
-            generated_sequence = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
-            # Generate Raag music.
-            generated_tokens_raag = generate_raag_music(model, raag_id_value, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
 
-            logging.info(f"Music generated for raag: {raag_name} and saved")
+        # Get raag ID, handling potential KeyError
+        raag_name = 'Basanti Kedar'
+        raag_id_value = raag_id_dict.get(raag_name, 0)
+        if raag_id_value == 0 and raag_name not in raag_id_dict:
+            logging.warning(f"Raag '{raag_name}' not found in raag ID dictionary. Using default ID 0.")
+        # Music generation
+        generated_sequence = generate_music_with_tonic(model, seed_sequence, raag_id_value, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
+        # Generate Raag music.
+        generated_tokens_raag = generate_raag_music(model, raag_id_value, seed_sequence, tokenizer, max_length=100, temperature=1.2, top_k=30, strategy=strategy, vocab_size=vocab_size, sequence_length=sequence_length)
 
-            # Save the generated sequence
-            with open(f'generated_sequence_{raag_name}.pickle', 'wb') as f:
-                pickle.dump(generated_sequence, f)
+        logging.info("Music generated and saved")
+
+        # Save the generated sequence
+        with open('generated_sequence.pickle', 'wb') as f:
+            pickle.dump(generated_sequence, f)
         
     logging.info(f"Total execution time: {time.time() - start_time:.2f} seconds")
     logging.info("Main process completed.")
